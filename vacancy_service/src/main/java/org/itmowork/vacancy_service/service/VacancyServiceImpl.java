@@ -4,7 +4,6 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.itmowork.vacancy_service.dto.request.VacancyCreateRequestDto;
 import org.itmowork.vacancy_service.dto.request.VacancyUpdateRequestDto;
-import org.itmowork.vacancy_service.dto.response.CompanyResponseDto;
 import org.itmowork.vacancy_service.dto.response.VacancyResponseDto;
 import org.itmowork.vacancy_service.exception.exceptions.*;
 import org.itmowork.vacancy_service.infrastructure.feign.CompanyClient;
@@ -56,6 +55,120 @@ public class VacancyServiceImpl implements VacancyService {
                 v.getCompanyId(),
                 v.getCurrency().getId()
         ));
+    }
+
+    @Override
+    public VacancyResponseDto createVacancy(
+            VacancyCreateRequestDto request,
+            VacancyStatusName statusName,
+            UUID userId
+    ) {
+        Boolean exists = companyClient.existsCompany(request.companyId());
+        if (exists == null || !exists) {
+            throw new CompanyNotFoundException("Company with id " + request.companyId() + " does not exist");
+        }
+
+        Boolean owns = companyClient.validateCompanyOwnership(request.companyId(), userId);
+        if (owns == null || !owns) {
+            throw new CompanyNotFoundException("User does not own this company");
+        }
+
+        Currency currency = currencyService.findCurrencyById(request.currencyId());
+        if (currency == null) {
+            throw new CurrencyNotFoundException("Currency with id " + request.currencyId() + " not found");
+        }
+
+        VacancyStatus vacancyStatus =
+                vacancyStatusService.findByVacancyStatusName(statusName);
+
+        validateSalaryBounds(request.salaryFrom(), request.salaryTo());
+
+        Vacancy vacancy = Vacancy.builder()
+                .title(request.title())
+                .description(request.description())
+                .salaryFrom(request.salaryFrom())
+                .salaryTo(request.salaryTo())
+                .createdAt(LocalDateTime.now())
+                .companyId(request.companyId())
+                .status(vacancyStatus)
+                .currency(currency)
+                .build();
+
+        Vacancy saved = vacancyRepository.save(vacancy);
+        return buildResponse(saved);
+    }
+
+    @Override
+    public VacancyResponseDto changeStatus(UUID userId, UUID vacancyId, VacancyStatusName newStatus) {
+
+        Vacancy vacancy = getAndValidateVacancy(vacancyId);
+        UUID companyId = vacancy.getCompanyId();
+
+        Boolean exists = companyClient.existsCompany(companyId);
+        if (exists == null || !exists) {
+            throw new CompanyNotFoundException("Company id not found: " + companyId);
+        }
+
+        Boolean owns = companyClient.validateCompanyOwnership(companyId, userId);
+        if (owns == null || !owns) {
+            throw new CompanyNotFoundException("User does not own this company");
+        }
+
+        VacancyStatusName currentStatus = vacancy.getStatus().getVacancyStatusName();
+
+        Set<VacancyStatusName> allowedNextStatuses =
+                ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of());
+
+        if (!allowedNextStatuses.contains(newStatus)) {
+            throw new InvalidVacancyStatusChangeException(
+                    "Impossible to change status from " + currentStatus + " to " + newStatus
+            );
+        }
+
+        VacancyStatus statusEntity = vacancyStatusService.findByVacancyStatusName(newStatus);
+        vacancy.setStatus(statusEntity);
+        validateSalaryBounds(vacancy.getSalaryFrom(), vacancy.getSalaryTo());
+        Vacancy saved = vacancyRepository.save(vacancy);
+
+        return buildResponse(saved);
+    }
+
+    @Override
+    public VacancyResponseDto updateVacancy(UUID userId, UUID id, VacancyUpdateRequestDto dto) {
+
+        Vacancy vacancy = getAndValidateVacancy(id);
+        UUID companyId = vacancy.getCompanyId();
+
+        Boolean exists = companyClient.existsCompany(companyId);
+        if (exists == null || !exists) {
+            throw new CompanyNotFoundException("Company not found: " + companyId);
+        }
+
+        Boolean owns = companyClient.validateCompanyOwnership(companyId, userId);
+        if (!owns) {
+            throw new CompanyNotFoundException("User does not own this company");
+        }
+
+        VacancyStatusName status = vacancy.getStatus().getVacancyStatusName();
+        if (status != VacancyStatusName.DRAFT && status != VacancyStatusName.PUBLISHED) {
+            throw new InvalidVacancyStatusException(
+                    "Update allowed only for DRAFT or PUBLISHED vacancies"
+            );
+        }
+
+        vacancyMapper.update(vacancy, dto);
+
+        if (dto.currencyId() != null) {
+            Currency currency = currencyService.findCurrencyById(dto.currencyId());
+            if (currency == null) {
+                throw new CurrencyNotFoundException("Currency with id=" + dto.currencyId() + " not found");
+            }
+            vacancy.setCurrency(currency);
+        }
+
+        validateSalaryBounds(vacancy.getSalaryFrom(), vacancy.getSalaryTo());
+        Vacancy saved = vacancyRepository.save(vacancy);
+        return buildResponse(saved);
     }
 
     @Override
@@ -113,118 +226,6 @@ public class VacancyServiceImpl implements VacancyService {
     }
 
     @Override
-    @Transactional
-    public VacancyResponseDto updateVacancy(UUID userId, UUID id, VacancyUpdateRequestDto dto) {
-
-        Vacancy vacancy = getAndValidateVacancy(id);
-        UUID companyId = vacancy.getCompanyId();
-
-        Boolean exists = companyClient.existsCompany(companyId);
-        if (exists == null || !exists) {
-            throw new CompanyNotFoundException("Company not found: " + companyId);
-        }
-
-        Boolean owns = companyClient.validateCompanyOwnership(companyId, userId);
-        if (!owns) {
-            throw new CompanyNotFoundException("User does not own this company");
-        }
-
-        VacancyStatusName status = vacancy.getStatus().getVacancyStatusName();
-        if (status != VacancyStatusName.DRAFT && status != VacancyStatusName.PUBLISHED) {
-            throw new InvalidVacancyStatusException(
-                    "Update allowed only for DRAFT or PUBLISHED vacancies"
-            );
-        }
-
-        vacancyMapper.update(vacancy, dto);
-
-        if (dto.currencyId() != null) {
-            Currency currency = currencyService.findCurrencyById(dto.currencyId());
-            if (currency == null) {
-                throw new CurrencyNotFoundException("Currency with id=" + dto.currencyId() + " not found");
-            }
-            vacancy.setCurrency(currency);
-        }
-
-        validateSalaryBounds(vacancy.getSalaryFrom(), vacancy.getSalaryTo());
-        Vacancy saved = vacancyRepository.save(vacancy);
-        return buildResponse(saved);
-    }
-
-
-    @Override
-    @Transactional
-    public VacancyResponseDto changeStatus(UUID userId, UUID vacancyId, VacancyStatusName newStatus) {
-
-        Vacancy vacancy = getAndValidateVacancy(vacancyId);
-        UUID companyId = vacancy.getCompanyId();
-
-        Boolean exists = companyClient.existsCompany(companyId);
-        if (exists == null || !exists) {
-            throw new CompanyNotFoundException("Company id not found: " + companyId);
-        }
-
-        Boolean owns = companyClient.validateCompanyOwnership(companyId, userId);
-        if (owns == null || !owns) {
-            throw new CompanyNotFoundException("User does not own this company");
-        }
-
-        VacancyStatusName currentStatus = vacancy.getStatus().getVacancyStatusName();
-
-        Set<VacancyStatusName> allowedNextStatuses =
-                ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of());
-
-        if (!allowedNextStatuses.contains(newStatus)) {
-            throw new InvalidVacancyStatusChangeException(
-                    "Impossible to change status from " + currentStatus + " to " + newStatus
-            );
-        }
-
-        VacancyStatus statusEntity = vacancyStatusService.findByVacancyStatusName(newStatus);
-        vacancy.setStatus(statusEntity);
-        validateSalaryBounds(vacancy.getSalaryFrom(), vacancy.getSalaryTo());
-        Vacancy saved = vacancyRepository.save(vacancy);
-
-        return buildResponse(saved);
-    }
-
-    @Override
-    @Transactional
-    public VacancyResponseDto createVacancy(UUID userId, VacancyCreateRequestDto request, VacancyStatusName statusName) {
-
-        Boolean exists = companyClient.existsCompany(request.companyId());
-        if (exists == null || !exists) {
-            throw new CompanyNotFoundException("Company with id " + request.companyId() + " does not exist");
-        }
-
-        Boolean owns = companyClient.validateCompanyOwnership(request.companyId(), userId);
-        if (owns == null || !owns) {
-            throw new CompanyNotFoundException("User does not own this company");
-        }
-
-        Currency currency = currencyService.findCurrencyById(request.currencyId());
-        if (currency == null) {
-            throw new CurrencyNotFoundException("Currency with id " + request.currencyId() + " not found");
-        }
-        VacancyStatus vacancyStatus = vacancyStatusService.findByVacancyStatusName(statusName);
-        validateSalaryBounds(request.salaryFrom(), request.salaryTo());
-
-        Vacancy vacancy = Vacancy.builder()
-                .title(request.title())
-                .description(request.description())
-                .salaryFrom(request.salaryFrom())
-                .salaryTo(request.salaryTo())
-                .createdAt(LocalDateTime.now())
-                .companyId(request.companyId())
-                .status(vacancyStatus)
-                .currency(currency)
-                .build();
-
-        Vacancy saved = vacancyRepository.save(vacancy);
-        return buildResponse(saved);
-    }
-
-    @Override
     public Vacancy getReferenceById(UUID vacancyId) {
         return vacancyRepository.getReferenceById(vacancyId);
     }
@@ -251,6 +252,24 @@ public class VacancyServiceImpl implements VacancyService {
         }
 
         return companyId;
+    }
+
+    @Override
+    public String getVacancyTitle(UUID vacancyId) {
+        String title = vacancyRepository.findTitleById(vacancyId);
+        if (title == null) {
+            throw new VacancyNotFoundException("Vacancy with id=" + vacancyId + " not found");
+        }
+        return title;
+    }
+
+    @Override
+    public boolean isVacancyPublished(UUID vacancyId) {
+        Boolean published = vacancyRepository.isPublished(vacancyId);
+        if (published == null) {
+            throw new VacancyNotFoundException("Vacancy with id=" + vacancyId + " not found");
+        }
+        return published;
     }
 
     private void validateSalaryBounds(Integer salaryFrom, Integer salaryTo) {
@@ -284,23 +303,5 @@ public class VacancyServiceImpl implements VacancyService {
                 .companyId(saved.getCompanyId())
                 .currencyId(saved.getCurrency().getId())
                 .build();
-    }
-
-    @Override
-    public String getVacancyTitle(UUID vacancyId) {
-        String title = vacancyRepository.findTitleById(vacancyId);
-        if (title == null) {
-            throw new VacancyNotFoundException("Vacancy with id=" + vacancyId + " not found");
-        }
-        return title;
-    }
-
-    @Override
-    public boolean isVacancyPublished(UUID vacancyId) {
-        Boolean published = vacancyRepository.isPublished(vacancyId);
-        if (published == null) {
-            throw new VacancyNotFoundException("Vacancy with id=" + vacancyId + " not found");
-        }
-        return published;
     }
 }

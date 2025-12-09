@@ -13,10 +13,17 @@ import java.util.UUID;
 
 public interface VacancyService {
 
-    VacancyResponseDto updateAndChangeStatus(
+    Page<VacancyResponseDto> getAllPublishedVacancies(Pageable pageable);
+
+    VacancyResponseDto createVacancy(
+            VacancyCreateRequestDto request,
+            VacancyStatusName statusName,
+            UUID userId
+    );
+
+    VacancyResponseDto changeStatus(
             UUID userId,
             UUID vacancyId,
-            VacancyUpdateRequestDto dto,
             VacancyStatusName newStatus
     );
 
@@ -26,23 +33,17 @@ public interface VacancyService {
             VacancyUpdateRequestDto dto
     );
 
-    VacancyResponseDto changeStatus(
+    VacancyResponseDto updateAndChangeStatus(
             UUID userId,
             UUID vacancyId,
+            VacancyUpdateRequestDto dto,
             VacancyStatusName newStatus
-    );
-
-    VacancyResponseDto createVacancy(
-            UUID userId,
-            VacancyCreateRequestDto request,
-            VacancyStatusName statusName
     );
 
     Vacancy getReferenceById(UUID vacancyId);
     boolean existsVacancyById(UUID id);
     VacancyStatus findCurrentVacancyStatusByVacancyId(UUID id);
     UUID findCompanyIdByVacancyId(UUID vacancyId);
-    Page<VacancyResponseDto> getAllPublishedVacancies(Pageable pageable);
     String getVacancyTitle(UUID vacancyId);
     boolean isVacancyPublished(UUID vacancyId);
 }

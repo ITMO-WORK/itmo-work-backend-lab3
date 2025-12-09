@@ -34,7 +34,10 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
 
                 serverHttpRequest.authorizeExchange(auth -> auth
-                        .pathMatchers("/api/auth/**").permitAll()
+                        .pathMatchers(
+                                "/api/auth/**",
+                                "/api/user/create"
+                        ).permitAll()
                         .anyExchange().authenticated()
                 ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
                 return serverHttpRequest.build();

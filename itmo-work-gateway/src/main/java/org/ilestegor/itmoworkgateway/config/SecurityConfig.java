@@ -25,9 +25,16 @@ public class SecurityConfig {
                         .pathMatchers(
                                 "/api/auth/login",
                                 "/api/auth/register",
+                                "/api/user/create",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/actuator/**"
+                                "/actuator/**",
+                                "/api/company/**",
+                                "/api/vacancies",
+                                "/api/vacancies/*/title",
+                                "/api/vacancies/*/is-published",
+                                "/api/vacancies/*/exists",
+                                "/api/vacancies/*/company-id"
                         ).permitAll()
                         .anyExchange().authenticated()
                 ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)

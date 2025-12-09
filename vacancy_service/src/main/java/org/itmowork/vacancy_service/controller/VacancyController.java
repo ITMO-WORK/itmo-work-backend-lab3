@@ -11,6 +11,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -22,70 +26,65 @@ public class VacancyController {
 
     private final VacancyService vacancyService;
 
-    @GetMapping("/{vacancyId}/company-id")
-    public ResponseEntity<UUID> getCompanyIdByVacancy(@PathVariable UUID vacancyId) {
-        UUID companyId = vacancyService.findCompanyIdByVacancyId(vacancyId);
-        return ResponseEntity.ok(companyId);
-    }
-
-    @PostMapping("/{userId}/draft")
-    public ResponseEntity<VacancyResponseDto> createDraftVacancy(
-            @PathVariable UUID userId,
-            @RequestBody @Valid VacancyCreateRequestDto request) {
-
-        VacancyResponseDto response = vacancyService.createVacancy(
-                userId,
-                request,
-                VacancyStatusName.DRAFT
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @PostMapping("/{userId}/publish")
-    public ResponseEntity<VacancyResponseDto> createPublishedVacancy(
-            @PathVariable UUID userId,
-            @RequestBody @Valid VacancyCreateRequestDto request) {
-
-        VacancyResponseDto response = vacancyService.createVacancy(
-                userId,
-                request,
-                VacancyStatusName.PUBLISHED
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @PatchMapping("/{userId}/{id}/change-status")
-    public ResponseEntity<VacancyResponseDto> changeStatus(
-            @PathVariable UUID userId,
-            @PathVariable UUID id,
-            @RequestParam VacancyStatusName newStatus) {
-
-        return ResponseEntity.ok(
-                vacancyService.changeStatus(userId, id, newStatus)
-        );
-    }
-
-    @PatchMapping("/{userId}/{id}/update")
-    public ResponseEntity<VacancyResponseDto> updateVacancy(
-            @PathVariable UUID userId,
-            @PathVariable UUID id,
-            @RequestBody @Valid VacancyUpdateRequestDto dto) {
-
-        return ResponseEntity.ok(
-                vacancyService.updateVacancy(userId, id, dto)
-        );
-    }
-
-    @PatchMapping("/{userId}/{id}/update-and-change-status")
+    @PatchMapping("/{id}/update-and-change-status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
     public ResponseEntity<VacancyResponseDto> updateAndChangeStatus(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal String userId,
             @PathVariable UUID id,
             @RequestBody @Valid VacancyUpdateRequestDto dto,
-            @RequestParam VacancyStatusName newStatus) {
-
+            @RequestParam VacancyStatusName newStatus
+    ) {
         return ResponseEntity.ok(
-                vacancyService.updateAndChangeStatus(userId, id, dto, newStatus)
+                vacancyService.updateAndChangeStatus(UUID.fromString(userId), id, dto, newStatus)
         );
+    }
+
+    @PatchMapping("/{id}/update")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    public ResponseEntity<VacancyResponseDto> updateVacancy(
+            @AuthenticationPrincipal String userId,
+            @PathVariable UUID id,
+            @RequestBody @Valid VacancyUpdateRequestDto dto
+    ) {
+        return ResponseEntity.ok(
+                vacancyService.updateVacancy(UUID.fromString(userId), id, dto)
+        );
+    }
+
+    @PatchMapping("/{id}/change-status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    public ResponseEntity<VacancyResponseDto> changeStatus(
+            @AuthenticationPrincipal String userId,
+            @PathVariable UUID id,
+            @RequestParam VacancyStatusName newStatus
+    ) {
+        return ResponseEntity.ok(
+                vacancyService.changeStatus(UUID.fromString(userId), id, newStatus)
+        );
+    }
+
+    @PostMapping("/publish")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    public ResponseEntity<VacancyResponseDto> createPublish(
+            @AuthenticationPrincipal String userId,
+            @RequestBody @Valid VacancyCreateRequestDto request
+    ) {
+        VacancyResponseDto response =
+                vacancyService.createVacancy(request, VacancyStatusName.PUBLISHED, UUID.fromString(userId));
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/draft")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    public ResponseEntity<VacancyResponseDto> createDraft(
+            @AuthenticationPrincipal String userId,
+            @RequestBody @Valid VacancyCreateRequestDto request
+    ) {
+        VacancyResponseDto response =
+                vacancyService.createVacancy(request, VacancyStatusName.DRAFT, UUID.fromString(userId));
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
@@ -93,6 +92,12 @@ public class VacancyController {
         return new PagedModel<>(
                 vacancyService.getAllPublishedVacancies(pageable)
         );
+    }
+
+    @GetMapping("/{vacancyId}/company-id")
+    public ResponseEntity<UUID> getCompanyIdByVacancy(@PathVariable UUID vacancyId) {
+        UUID companyId = vacancyService.findCompanyIdByVacancyId(vacancyId);
+        return ResponseEntity.ok(companyId);
     }
 
     @GetMapping("/{id}/title")
