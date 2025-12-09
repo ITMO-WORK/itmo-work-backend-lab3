@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: user-service
+  profiles:
+    active: ${PROFILE:dev}
+  config:
+    activate:
+      on-profile: dev
+    import: optional:configserver:http://localhost:${CONFIG_SERVER_PORT:9991}
+server:
+  port: 8081

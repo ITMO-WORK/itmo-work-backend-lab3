@@ -1,0 +1,15 @@
+services:
+  vacancy-db:
+    image: postgres:17
+    container_name: vacancy-db
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_vacancy-db-data:/var/lib/postgresql/data
+
+volumes:
+  postgres_vacancy-db-data:

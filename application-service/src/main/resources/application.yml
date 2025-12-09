@@ -1,0 +1,11 @@
+server:
+  port: 0
+spring:
+  application:
+    name: application-service
+  profiles:
+    active: ${PROFILE:dev}
+  config:
+    activate:
+      on-profile: dev
+    import: configserver:http://localhost:9991

@@ -1,0 +1,15 @@
+services:
+  user-db:
+    image: postgres:17
+    container_name: user-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_user-db-data:/var/lib/postgresql/data
+
+volumes:
+  postgres_user-db-data:

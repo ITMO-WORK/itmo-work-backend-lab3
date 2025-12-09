@@ -1,0 +1,43 @@
+server:
+  port: ${PORT:8765}
+
+spring:
+  application:
+    name: itmo-work-gateway
+
+  profiles:
+    active: ${PROFILE:dev}
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          routes:
+            - id: application-service
+              uri: lb://application-service
+              predicates:
+                - Path=/api/application/**
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/user/**
+            - id: company-service
+              uri: lb://company-service
+              predicates:
+                - Path=/api/company/**
+            - id: vacancy-service
+              uri: lb://vacancy-service
+              predicates:
+                - Path=/api/vacancies/**
+
+eureka:
+  client:
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka
