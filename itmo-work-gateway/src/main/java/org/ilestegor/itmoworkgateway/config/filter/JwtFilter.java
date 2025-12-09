@@ -1,6 +1,11 @@
 package org.ilestegor.itmoworkgateway.config.filter;
 
 import org.ilestegor.itmoworkgateway.service.interfaces.JwtService;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -13,6 +18,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -30,25 +37,18 @@ public class JwtFilter implements WebFilter, Ordered {
 
         String token = authHeader.substring(7);
 
-        Claims claims;
         try {
-            claims = jwtService.parseAllClaims(token);
+            Claims claims = jwtService.parseAllClaims(token);
+            String email = claims.getSubject();
+
+            if (email == null || email.isBlank())
+                return chain.filter(exchange);
+            Authentication authentication = new UsernamePasswordAuthenticationToken(email, null, List.<SimpleGrantedAuthority>of());
+
+            return chain.filter(exchange).contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(new SecurityContextImpl(authentication))));
         } catch (Exception ex) {
             return unauthorized(exchange, "Invalid or expired JWT");
         }
-
-//        String email = claims.getSubject();
-//        String roles = (String) claims.get("roles");
-//        String userId = (String) claims.get("userId");
-
-//        var mutatedRequest = exchange.getRequest()
-//                .mutate()
-//                .header("X-User-Id", userId)
-//                .header("X-User-Email", email)
-//                .header("X-User-Roles", roles)
-//                .build();
-
-        return chain.filter(exchange);
     }
 
     private Mono<Void> unauthorized(ServerWebExchange exchange, String message) {
