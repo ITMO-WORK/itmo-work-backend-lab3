@@ -40,7 +40,7 @@ public class JwtFilter implements WebFilter {
             if (email == null || email.isBlank())
                 return chain.filter(exchange);
 
-            Authentication authentication = new UsernamePasswordAuthenticationToken(email, null, List.<SimpleGrantedAuthority>of());
+            Authentication authentication = new UsernamePasswordAuthenticationToken(email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
 
             return chain.filter(exchange).contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(new SecurityContextImpl(authentication))));
         } catch (JwtException | IllegalArgumentException ex){

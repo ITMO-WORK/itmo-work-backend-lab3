@@ -13,10 +13,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.*;
 
 @Component
 public class JwtServiceImpl implements JwtService {
@@ -35,11 +32,12 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String generateAccessToken(Authentication authentication, UUID userId) {
+    public String generateAccessToken(Authentication authentication, UUID userId, List<String> roles) {
         HashMap<String, Object> claims = new HashMap<>();
         Instant now = Instant.now();
         Instant exp = now.plus(jwtTtl);
         claims.put("userId", userId);
+        claims.put("roles", roles);
         return Jwts.builder()
                 .claims().add(claims)
                 .subject(authentication.getName())
