@@ -23,7 +23,6 @@ public class JwtFilter implements GlobalFilter, Ordered {
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
-        // Allow login endpoint
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return chain.filter(exchange);
         }
