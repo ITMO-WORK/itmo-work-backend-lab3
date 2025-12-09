@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
 @Configuration
@@ -27,10 +28,15 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
 
                 serverHttpRequest.authorizeExchange(auth -> auth
-                        .pathMatchers("/api/auth/login").permitAll()
+                        .pathMatchers("/api/auth/**").permitAll()
                         .anyExchange().authenticated()
                 ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
                 return serverHttpRequest.build();
 
+    }
+
+    @Bean
+    public BCryptPasswordEncoder bCryptPasswordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }

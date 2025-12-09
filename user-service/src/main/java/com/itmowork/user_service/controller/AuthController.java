@@ -1,5 +1,6 @@
 package com.itmowork.user_service.controller;
 
+import com.itmowork.user_service.dto.request.LoginRequestDto;
 import com.itmowork.user_service.dto.request.UserRequestDto;
 import com.itmowork.user_service.dto.response.AuthResponseDto;
 import com.itmowork.user_service.service.interfaces.AuthService;
@@ -25,5 +26,10 @@ public class AuthController {
         return userRequestDto
                 .flatMap(authService::registerUser)
                 .map(response -> response);
+    }
+
+    @PostMapping("/login")
+    public Mono<AuthResponseDto> login(@RequestBody @Valid Mono<LoginRequestDto> loginRequestDto){
+        return loginRequestDto.flatMap(authService::loginUser).map(resp -> resp);
     }
 }

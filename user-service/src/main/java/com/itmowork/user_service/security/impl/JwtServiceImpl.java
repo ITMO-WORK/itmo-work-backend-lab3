@@ -35,11 +35,11 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String generateAccessToken(Authentication authentication) {
+    public String generateAccessToken(Authentication authentication, UUID userId) {
         HashMap<String, Object> claims = new HashMap<>();
         Instant now = Instant.now();
         Instant exp = now.plus(jwtTtl);
-        claims.put("userId", (UUID)authentication.getPrincipal());
+        claims.put("userId", userId);
         return Jwts.builder()
                 .claims().add(claims)
                 .subject(authentication.getName())

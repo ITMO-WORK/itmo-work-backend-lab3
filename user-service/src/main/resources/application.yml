@@ -9,3 +9,7 @@ spring:
     import: optional:configserver:http://localhost:${CONFIG_SERVER_PORT:9991}
 server:
   port: 8081
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-ttl: ${JWT_TTL}
