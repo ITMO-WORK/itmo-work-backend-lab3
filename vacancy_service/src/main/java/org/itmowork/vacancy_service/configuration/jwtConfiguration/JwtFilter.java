@@ -73,6 +73,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
         } catch (JwtException | IllegalArgumentException ex) {
             SecurityContextHolder.clearContext();
+            throw new org.springframework.security.core.AuthenticationException("Invalid JWT", ex) {};
         }
 
         filterChain.doFilter(request, response);

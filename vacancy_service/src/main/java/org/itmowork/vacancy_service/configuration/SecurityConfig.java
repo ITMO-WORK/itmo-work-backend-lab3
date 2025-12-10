@@ -2,6 +2,7 @@ package org.itmowork.vacancy_service.configuration;
 
 import lombok.RequiredArgsConstructor;
 import org.itmowork.vacancy_service.configuration.handler.CustomAccessDeniedHandler;
+import org.itmowork.vacancy_service.configuration.handler.CustomAuthenticationEntryPoint;
 import org.itmowork.vacancy_service.configuration.jwtConfiguration.JwtFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,6 +21,7 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -37,6 +39,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
