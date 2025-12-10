@@ -2,6 +2,7 @@ package org.ilestegor.applicationservice.service;
 
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import org.ilestegor.applicationservice.configuration.UserPrincipal;
 import org.ilestegor.applicationservice.dto.ApplicationDto;
 import org.ilestegor.applicationservice.dto.request.ApplicationCreateRequestDto;
 import org.ilestegor.applicationservice.dto.request.ApplicationStatusUpdateRequestDto;
@@ -21,6 +22,11 @@ import org.ilestegor.applicationservice.service.interfaces.ApplicationStatusServ
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -45,89 +51,129 @@ public class ApplicationServiceImpl implements ApplicationService {
     private final VacancyClient vacancyClient;
 
     @Override
-    public Mono<ApplicationCreateResponseDto> createApplication(UUID id, UUID userId, ApplicationCreateRequestDto applicationCreateRequestDto) {
-        return checkUserExists(userId).then(checkVacancyExists(id)).then(checkVacancyIsPublished(id)).then(checkUserHasNotApplied(userId, id)).then(createAndSaveApplication(userId, id, applicationCreateRequestDto));
+    public Mono<ApplicationCreateResponseDto> createApplication(UUID vacancyId, ApplicationCreateRequestDto applicationCreateRequestDto) {
+        return getUserDetailsFromContext().flatMap(userPrincipal -> checkUserExists(userPrincipal.userId()).then(checkVacancyExists(vacancyId)).then(checkVacancyIsPublished(vacancyId)).then(checkUserHasNotApplied(userPrincipal.userId(), vacancyId)).then(createAndSaveApplication(userPrincipal.userId(), vacancyId, applicationCreateRequestDto)));
     }
 
     @Override
-    public Mono<ApplicationCreateResponseDto> updateApplication(UUID id, UUID userId, ApplicationCreateRequestDto applicationCreateRequestDto) {
-        return checkUserExists(userId).then(checkVacancyExists(id)).then(checkVacancyIsPublished(id)).then(checkUserHasAlreadyAppliedForVacancy(userId, id)).then(updateAndSaveApplication(id, userId, applicationCreateRequestDto));
+    public Mono<ApplicationCreateResponseDto> updateApplication(UUID vacancyId, ApplicationCreateRequestDto applicationCreateRequestDto) {
+        return getUserDetailsFromContext().flatMap(userPrincipal -> checkUserExists(userPrincipal.userId()).then(checkVacancyExists(vacancyId)).then(checkVacancyIsPublished(vacancyId)).then(checkUserHasAlreadyAppliedForVacancy(userPrincipal.userId(), vacancyId)).then(updateAndSaveApplication(vacancyId, userPrincipal.userId(), applicationCreateRequestDto)));
     }
 
-    //Only for admins
     @Override
-    public Mono<ApplicationStatusUpdateResponseDto> updateApplicationStatus(UUID applicationId, UUID userId, ApplicationStatusUpdateRequestDto applicationStatusUpdateRequestDto) {
-        return checkUserExists(userId)
-                .then(getVacancyIdByApplicationId(applicationId))
-                .flatMap(vacancyId ->
-                        checkVacancyExists(vacancyId)
-                                .then(checkUserBelongsToCompany(vacancyId, userId))
-                                .then(applicationRepository.findById(applicationId)
-                                        .switchIfEmpty(Mono.error(new UserApplicationNotFoundException()))
-                                        .flatMap(application ->
-                                                applicationStatusService.findApplicationStatusByApplicationStatusName(applicationStatusUpdateRequestDto.applicationStatusName())
-                                                        .switchIfEmpty(Mono.error(new ApplicationStatusNotFoundException()))
-                                                        .flatMap(status -> {
-                                                            application.setStatus(status.getId());
-                                                            application.setUpdatedAt(LocalDateTime.now());
-                                                            return applicationRepository.save(application)
-                                                                    .map(saved -> new ApplicationStatusUpdateResponseDto(
-                                                                            status.getApplicationStatusName().getValue(),
-                                                                            saved.getUpdatedAt()
-                                                                    ));
-                                                        })
-                                        )
+    public Mono<ApplicationStatusUpdateResponseDto> updateApplicationStatus(UUID applicationId, ApplicationStatusUpdateRequestDto applicationStatusUpdateRequestDto) {
+        return getUserDetailsFromContext()
+                .flatMap(principal -> {
+                    UUID userId = principal.userId();
+
+                    return checkUserExists(userId)
+                            .then(getVacancyIdByApplicationId(applicationId))
+                            .flatMap(vacancyId ->
+                                    checkVacancyExists(vacancyId).then(checkApplicationExists(applicationId))
+                                            .then(checkUserBelongsToCompany(vacancyId, userId))
+                                            .then(updateApplicationStatusInternal(
+                                                    applicationId,
+                                                    applicationStatusUpdateRequestDto
+                                            ))
+                            );
+                });
+    }
+
+    @Override
+    public Mono<Page<ApplicationDto>> getAllApplicationsByVacancyId(UUID vacancyId, Pageable pageable) {
+
+        return getUserDetailsFromContext().flatMap(principal -> {
+            return checkUserExists(principal.userId())
+                    .then(checkVacancyExists(vacancyId))
+                    .then(checkUserBelongsToCompany(vacancyId, principal.userId()))
+                    .then(getVacancyTitle(vacancyId))
+                    .flatMap(vacancyTitle -> applicationRepository.findAllByVacancyId(vacancyId, pageable)
+                            .flatMap(application -> checkUserExists(application.getUserId())
+                                    .map(user -> {
+                                        ApplicationDto applicationDto = applicationMapper.fromApplicationtoApplicationDto(application);
+                                        return applicationDto.toBuilder().userFullName(user.fullName()).vacancyTitle(vacancyTitle)
+                                                .build();
+                                    })
+                            ).collectList()
+                            .zipWith(applicationRepository.countApplicationByVacancyId(vacancyId))
+                            .map(application -> new PageImpl<>(application.getT1(), pageable, application.getT2())));
+        });
+    }
+
+    private Mono<ApplicationStatusUpdateResponseDto> updateApplicationStatusInternal(
+            UUID applicationId,
+            ApplicationStatusUpdateRequestDto applicationStatusUpdateRequestDto
+    ) {
+        return applicationRepository.findById(applicationId)
+                .switchIfEmpty(Mono.error(new UserApplicationNotFoundException()))
+                .flatMap(application ->
+                        applicationStatusService
+                                .findApplicationStatusByApplicationStatusName(
+                                        applicationStatusUpdateRequestDto.applicationStatusName()
                                 )
+                                .switchIfEmpty(Mono.error(new ApplicationStatusNotFoundException()))
+                                .flatMap(status -> {
+                                    application.setStatus(status.getId());
+                                    application.setUpdatedAt(LocalDateTime.now());
+
+                                    return applicationRepository.save(application)
+                                            .map(saved -> new ApplicationStatusUpdateResponseDto(
+                                                    status.getApplicationStatusName().getValue(),
+                                                    saved.getUpdatedAt()
+                                            ));
+                                })
                 );
     }
 
-    @Override
-    public Mono<Page<ApplicationDto>> getAllApplicationsByVacancyId(UUID vacancyId, UUID userId, Pageable pageable) {
-
-        return checkUserExists(userId)
-                .then(checkVacancyExists(vacancyId))
-                .then(checkUserBelongsToCompany(vacancyId, userId))
-                .then(getVacancyTitle(vacancyId))
-                .flatMap(vacancyTitle -> applicationRepository.findAllByVacancyId(vacancyId, pageable)
-                        .flatMap(application -> checkUserExists(application.getUserId())
-                        .map(user -> {
-                            ApplicationDto applicationDto = applicationMapper.fromApplicationtoApplicationDto(application);
-                            return applicationDto.toBuilder().userFullName(user.fullName()).vacancyTitle(vacancyTitle)
-                                    .build();
-                        })
-                ).collectList()
-                                .zipWith(applicationRepository.countApplicationByVacancyId(vacancyId))
-                                .map(application -> new PageImpl<>(application.getT1(), pageable, application.getT2())));
-    }
-
     private Mono<UUID> getCompanyIdByVacancyId(UUID vacancyId){
-        return Mono.fromCallable(() -> vacancyClient.getCompanyIdByVacancy(vacancyId))
-                .subscribeOn(Schedulers.boundedElastic())
-                .switchIfEmpty(Mono.error(new VacancyNotFoundException()));
+        return Mono.deferContextual(ctx -> {
+            String token = ctx.getOrDefault("authToken", null);
+            if (token == null)
+                return Mono.error(new BadCredentialsException("Not authorized"));
+            return Mono.fromCallable(() -> vacancyClient.getCompanyIdByVacancy(vacancyId, token)).subscribeOn(Schedulers.boundedElastic());
+        }).onErrorMap(FeignException.NotFound.class, ex -> new VacancyNotFoundException());
 
     }
 
     private Mono<Void> checkUserBelongsToCompany(UUID vacancyId,  UUID userId) {
-        return getCompanyIdByVacancyId(vacancyId)
-                .flatMap(companyId -> Mono.fromCallable(() -> companyClient.isUserBelongsToCompany(companyId, userId)).subscribeOn(Schedulers.boundedElastic())
-                        .flatMap(belongs -> {
-                            if (Boolean.TRUE.equals(belongs))
-                                    return Mono.empty();
-                            return Mono.error(new UserDoesNotBelongsToCompanyException());
-                        }));
+        return Mono.deferContextual(ctx -> {
+            String token = ctx.getOrDefault("authToken", null);
+            if (token == null)
+                return Mono.error(new BadCredentialsException("Not authorized"));
+            return getCompanyIdByVacancyId(vacancyId).flatMap(companyId ->
+                    Mono.fromCallable(() -> companyClient.isUserBelongsToCompany(companyId, userId, token)).subscribeOn(Schedulers.boundedElastic()));
+        }).onErrorMap(FeignException.NotFound.class, ex -> new UserNotFoundException())
+                .flatMap(belongs -> {
+                    if (Boolean.TRUE.equals(belongs))
+                        return Mono.empty();
+                    return Mono.error(new UserDoesNotBelongsToCompanyException());
+                });
     }
 
     private Mono<String> getVacancyTitle(UUID vacancyId){
-        return Mono.fromCallable(() -> vacancyClient.getVacancyTitle(vacancyId))
-                .subscribeOn(Schedulers.boundedElastic())
-                .switchIfEmpty(Mono.error(new VacancyNotFoundException()));
+        return Mono.deferContextual(ctx -> {
+            String token = ctx.getOrDefault("authToken", null);
+            if (token == null)
+                return Mono.error(new BadCredentialsException("Not authorized"));
+
+            return Mono.fromCallable(() -> vacancyClient.getVacancyTitle(vacancyId, token)).subscribeOn(Schedulers.boundedElastic());
+        }).onErrorMap(FeignException.NotFound.class, ex -> new VacancyNotFoundException());
     }
 
-    private Mono<Boolean> checkVacancyIsPublished(UUID vacancyId){
-        return Mono.fromCallable(() -> vacancyClient.isVacancyPublished(vacancyId))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(exists -> {
-                    if (Boolean.TRUE.equals(exists)) {
+    private Mono<Boolean> checkVacancyIsPublished(UUID vacancyId) {
+        return Mono.deferContextual(ctx -> {
+                    String token = ctx.getOrDefault("authToken", null);
+                    if (token == null) {
+                        return Mono.error(new BadCredentialsException("Authorization token not found in context"));
+                    }
+                    return Mono.fromCallable(() ->
+                                    vacancyClient.isVacancyPublished(vacancyId, token)
+                            )
+                            .subscribeOn(Schedulers.boundedElastic());
+                })
+                .onErrorMap(FeignException.NotFound.class, ex -> new VacancyNotFoundException())
+                .flatMap(isPublished -> {
+                    if (Boolean.TRUE.equals(isPublished)) {
                         return Mono.just(true);
                     }
                     return Mono.error(new VacancyNotPublishedException());
@@ -152,12 +198,22 @@ public class ApplicationServiceImpl implements ApplicationService {
                 );
     }
 
-    private Mono<Void> checkVacancyExists(UUID vacancyId){
-        return Mono.fromCallable(() -> vacancyClient.isVacancyExists(vacancyId))
-                .subscribeOn(Schedulers.boundedElastic())
+    private Mono<Void> checkVacancyExists(UUID vacancyId) {
+        return Mono.deferContextual(ctx -> {
+                    String token = ctx.getOrDefault("authToken", null);
+                    if (token == null) {
+                        return Mono.error(new BadCredentialsException("Authorization token not found in context"));
+                    }
+                    return Mono.fromCallable(() ->
+                                    vacancyClient.isVacancyExists(vacancyId, token)
+                            )
+                            .subscribeOn(Schedulers.boundedElastic());
+                })
+                .onErrorMap(FeignException.NotFound.class, ex -> new VacancyNotFoundException())
                 .flatMap(exists -> {
-                    if (Boolean.TRUE.equals(exists))
+                    if (Boolean.TRUE.equals(exists)) {
                         return Mono.empty();
+                    }
                     return Mono.error(new VacancyNotFoundException());
                 });
     }
@@ -186,8 +242,15 @@ public class ApplicationServiceImpl implements ApplicationService {
 
 
     private Mono<UserResponseDto> checkUserExists(UUID userId) {
-        return Mono.fromCallable(() -> userClient.isUserExistsById(userId))
-                .subscribeOn(Schedulers.boundedElastic())
+        return Mono.deferContextual(ctx -> {
+                    String token = ctx.getOrDefault("authToken", null);
+                    if (token == null) {
+                        return Mono.error(new BadCredentialsException("Authorization token not found in context"));
+                    }
+                    return Mono.fromCallable(() ->
+                                    userClient.isUserExistsById(userId, token))
+                            .subscribeOn(Schedulers.boundedElastic());
+                })
                 .onErrorMap(FeignException.NotFound.class, ex -> new UserNotFoundException())
                 .flatMap(dto -> {
                     if (dto == null || dto.id() == null) {
@@ -227,5 +290,12 @@ public class ApplicationServiceImpl implements ApplicationService {
                             saved.getCoverLetter()
                     ));
                 });
+    }
+
+    private Mono<UserPrincipal> getUserDetailsFromContext(){
+        return ReactiveSecurityContextHolder.getContext()
+                .map(SecurityContext::getAuthentication)
+                .map(Authentication::getPrincipal)
+                .cast(UserPrincipal.class);
     }
 }

@@ -9,3 +9,10 @@ spring:
     activate:
       on-profile: dev
     import: configserver:http://localhost:9991
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            logger-level: FULL

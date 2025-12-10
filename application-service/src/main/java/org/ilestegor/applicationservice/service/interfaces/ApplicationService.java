@@ -13,11 +13,11 @@ import java.util.UUID;
 
 public interface ApplicationService {
 
-    Mono<ApplicationCreateResponseDto> createApplication(UUID id, UUID userId, ApplicationCreateRequestDto applicationCreateRequestDto);
+    Mono<ApplicationCreateResponseDto> createApplication(UUID vacancyId, ApplicationCreateRequestDto applicationCreateRequestDto);
 
-    Mono<ApplicationCreateResponseDto> updateApplication(UUID id, UUID userId, ApplicationCreateRequestDto applicationCreateRequestDto);
+    Mono<ApplicationCreateResponseDto> updateApplication(UUID vacancyId, ApplicationCreateRequestDto applicationCreateRequestDto);
 
-    Mono<ApplicationStatusUpdateResponseDto> updateApplicationStatus(UUID applicationId, UUID userId, ApplicationStatusUpdateRequestDto applicationStatusUpdateRequestDto);
+    Mono<ApplicationStatusUpdateResponseDto> updateApplicationStatus(UUID applicationId, ApplicationStatusUpdateRequestDto applicationStatusUpdateRequestDto);
 
-    Mono<Page<ApplicationDto>> getAllApplicationsByVacancyId(UUID vacancyId, UUID userId, Pageable pageable);
+    Mono<Page<ApplicationDto>> getAllApplicationsByVacancyId(UUID vacancyId, Pageable pageable);
 }
