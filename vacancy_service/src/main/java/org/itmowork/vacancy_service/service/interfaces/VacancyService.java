@@ -17,24 +17,20 @@ public interface VacancyService {
 
     VacancyResponseDto createVacancy(
             VacancyCreateRequestDto request,
-            VacancyStatusName statusName,
-            UUID userId
+            VacancyStatusName statusName
     );
 
     VacancyResponseDto changeStatus(
-            UUID userId,
             UUID vacancyId,
             VacancyStatusName newStatus
     );
 
     VacancyResponseDto updateVacancy(
-            UUID userId,
             UUID vacancyId,
             VacancyUpdateRequestDto dto
     );
 
     VacancyResponseDto updateAndChangeStatus(
-            UUID userId,
             UUID vacancyId,
             VacancyUpdateRequestDto dto,
             VacancyStatusName newStatus

@@ -28,48 +28,53 @@ public class JwtFilter implements WebFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return chain.filter(exchange);
         }
+
         String token = authHeader.substring(7);
+
         try {
             Claims claims = jwtService.parseAllClaims(token);
             String email = claims.getSubject();
             String userId = claims.get("userId", String.class);
             List<String> roles = claims.get("roles", List.class);
+
             if (email == null || email.isBlank() || userId == null) {
                 return unauthorized(exchange);
             }
+
             List<SimpleGrantedAuthority> authorities =
-                    roles.stream()
+                    roles == null
+                            ? List.of()
+                            : (List<SimpleGrantedAuthority>) roles.stream()
                             .map(SimpleGrantedAuthority::new)
                             .toList();
+
+            // principal = email, credentials = token (JWT)
             Authentication auth = new UsernamePasswordAuthenticationToken(
                     email,
-                    null,
+                    token,
                     authorities
             );
-            var mutatedRequest = exchange.getRequest()
-                    .mutate()
-                    .header("X-User-Id", userId)
-                    .header("X-User-Email", email)
-                    .header("X-User-Roles", String.join(",", roles))
-                    .build();
-            var mutatedExchange = exchange.mutate().request(mutatedRequest).build();
-            return chain.filter(mutatedExchange)
-                    .contextWrite(ReactiveSecurityContextHolder.withSecurityContext(
-                            Mono.just(new SecurityContextImpl(auth))
-                    ));
+
+            return chain.filter(exchange)
+                    .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
+
         } catch (Exception e) {
             return unauthorized(exchange);
         }
     }
+
     private Mono<Void> unauthorized(ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
         return exchange.getResponse().setComplete();
     }
+
     @Override
     public int getOrder() {
         return -1;
     }
 }
+

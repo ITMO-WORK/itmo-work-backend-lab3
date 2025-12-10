@@ -2,6 +2,7 @@ package org.itmowork.vacancy_service.service;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.itmowork.vacancy_service.utils.SecurityUtils;
 import org.itmowork.vacancy_service.dto.request.VacancyCreateRequestDto;
 import org.itmowork.vacancy_service.dto.request.VacancyUpdateRequestDto;
 import org.itmowork.vacancy_service.dto.response.VacancyResponseDto;
@@ -60,9 +61,10 @@ public class VacancyServiceImpl implements VacancyService {
     @Override
     public VacancyResponseDto createVacancy(
             VacancyCreateRequestDto request,
-            VacancyStatusName statusName,
-            UUID userId
+            VacancyStatusName statusName
     ) {
+        UUID userId = SecurityUtils.getCurrentUserId();
+
         Boolean exists = companyClient.existsCompany(request.companyId());
         if (exists == null || !exists) {
             throw new CompanyNotFoundException("Company with id " + request.companyId() + " does not exist");
@@ -99,7 +101,10 @@ public class VacancyServiceImpl implements VacancyService {
     }
 
     @Override
-    public VacancyResponseDto changeStatus(UUID userId, UUID vacancyId, VacancyStatusName newStatus) {
+    public VacancyResponseDto changeStatus(
+            UUID vacancyId, VacancyStatusName newStatus
+    ) {
+        UUID userId = SecurityUtils.getCurrentUserId();
 
         Vacancy vacancy = getAndValidateVacancy(vacancyId);
         UUID companyId = vacancy.getCompanyId();
@@ -134,7 +139,10 @@ public class VacancyServiceImpl implements VacancyService {
     }
 
     @Override
-    public VacancyResponseDto updateVacancy(UUID userId, UUID id, VacancyUpdateRequestDto dto) {
+    public VacancyResponseDto updateVacancy(
+            UUID id, VacancyUpdateRequestDto dto
+    ) {
+        UUID userId = SecurityUtils.getCurrentUserId();
 
         Vacancy vacancy = getAndValidateVacancy(id);
         UUID companyId = vacancy.getCompanyId();
@@ -174,11 +182,12 @@ public class VacancyServiceImpl implements VacancyService {
     @Override
     @Transactional
     public VacancyResponseDto updateAndChangeStatus(
-            UUID userId,
             UUID vacancyId,
             VacancyUpdateRequestDto dto,
             VacancyStatusName newStatus
     ) {
+        UUID userId = SecurityUtils.getCurrentUserId();
+
         Vacancy vacancy = getAndValidateVacancy(vacancyId);
         UUID companyId = vacancyRepository.findCompanyId(vacancyId);
 

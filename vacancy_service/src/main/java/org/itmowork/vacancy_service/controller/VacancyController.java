@@ -29,48 +29,44 @@ public class VacancyController {
     @PatchMapping("/{id}/update-and-change-status")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
     public ResponseEntity<VacancyResponseDto> updateAndChangeStatus(
-            @AuthenticationPrincipal String userId,
             @PathVariable UUID id,
             @RequestBody @Valid VacancyUpdateRequestDto dto,
             @RequestParam VacancyStatusName newStatus
     ) {
         return ResponseEntity.ok(
-                vacancyService.updateAndChangeStatus(UUID.fromString(userId), id, dto, newStatus)
+                vacancyService.updateAndChangeStatus(id, dto, newStatus)
         );
     }
 
     @PatchMapping("/{id}/update")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
     public ResponseEntity<VacancyResponseDto> updateVacancy(
-            @AuthenticationPrincipal String userId,
             @PathVariable UUID id,
             @RequestBody @Valid VacancyUpdateRequestDto dto
     ) {
         return ResponseEntity.ok(
-                vacancyService.updateVacancy(UUID.fromString(userId), id, dto)
+                vacancyService.updateVacancy(id, dto)
         );
     }
 
     @PatchMapping("/{id}/change-status")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
     public ResponseEntity<VacancyResponseDto> changeStatus(
-            @AuthenticationPrincipal String userId,
             @PathVariable UUID id,
             @RequestParam VacancyStatusName newStatus
     ) {
         return ResponseEntity.ok(
-                vacancyService.changeStatus(UUID.fromString(userId), id, newStatus)
+                vacancyService.changeStatus(id, newStatus)
         );
     }
 
     @PostMapping("/publish")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
     public ResponseEntity<VacancyResponseDto> createPublish(
-            @AuthenticationPrincipal String userId,
             @RequestBody @Valid VacancyCreateRequestDto request
     ) {
         VacancyResponseDto response =
-                vacancyService.createVacancy(request, VacancyStatusName.PUBLISHED, UUID.fromString(userId));
+                vacancyService.createVacancy(request, VacancyStatusName.PUBLISHED);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -78,11 +74,10 @@ public class VacancyController {
     @PostMapping("/draft")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
     public ResponseEntity<VacancyResponseDto> createDraft(
-            @AuthenticationPrincipal String userId,
             @RequestBody @Valid VacancyCreateRequestDto request
     ) {
         VacancyResponseDto response =
-                vacancyService.createVacancy(request, VacancyStatusName.DRAFT, UUID.fromString(userId));
+                vacancyService.createVacancy(request, VacancyStatusName.DRAFT);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

@@ -23,6 +23,7 @@ public class JwtServiceImpl implements JwtService {
     public Claims parseAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(key)
+                .clockSkewSeconds(30)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
