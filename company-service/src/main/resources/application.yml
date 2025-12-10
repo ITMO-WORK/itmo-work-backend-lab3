@@ -29,5 +29,5 @@ spring:
 
   config:
     activate:
-      on-profile: dev
+      on-profile: ${PROFILE:dev}
     import: optional:configserver:http://localhost:${CONFIG_SERVER_PORT:9991}

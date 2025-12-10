@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,9 +23,18 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public Mono<AuthResponseDto> register(@RequestBody @Valid Mono<UserRequestDto> userRequestDto){
         return userRequestDto
                 .flatMap(authService::registerUser)
+                .map(response -> response);
+    }
+
+    @PostMapping("/register-company-owner")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public Mono<AuthResponseDto> registerCompanyOwner(@RequestBody @Valid Mono<UserRequestDto> userRequestDto){
+        return userRequestDto
+                .flatMap(authService::registerCompanyOwner)
                 .map(response -> response);
     }
 

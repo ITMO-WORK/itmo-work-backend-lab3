@@ -26,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -203,12 +204,20 @@ public class CompanyServiceImpl implements CompanyService {
 
 
     public Mono<UserResponseDto> createRemoteUser(UserRequestDto userRequestDto){
-        CircuitBreaker cb = registry.circuitBreaker("userClientCB");
+        return Mono.deferContextual(ctx -> {
+            String token = ctx.getOrDefault("authToken", null);
 
-        return Mono.fromCallable(() -> userClient.createUser(userRequestDto))
-                .subscribeOn(Schedulers.boundedElastic())
-                .transformDeferred(CircuitBreakerOperator.of(cb))
-                .onErrorResume(e -> createUserFallback(userRequestDto, e));
+            CircuitBreaker cb = registry.circuitBreaker("userClientCB");
+
+            if (token == null) return Mono.error(new BadCredentialsException("Not authorized"));
+
+            return Mono.fromCallable(() -> {
+                        return userClient.registerCompanyOwner(userRequestDto, "Bearer " + token);
+                    })
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .transformDeferred(CircuitBreakerOperator.of(cb))
+                    .onErrorResume(e -> createUserFallback(userRequestDto, e));
+        });
     }
 
     public Mono<UserResponseDto> findUserById(UUID userId) {
