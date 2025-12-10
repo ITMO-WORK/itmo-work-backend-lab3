@@ -5,11 +5,7 @@ spring:
     active: ${PROFILE:dev}
   config:
     activate:
-      on-profile: dev
-    import: optional:configserver:http://localhost:${CONFIG_SERVER_PORT:9991}
+      on-profile: ${PROFILE:dev}
+    import: configserver:${CONFIG_SERVER_URL:http://localhost:9991}
 server:
   port: 8081
-
-jwt:
-  secret: ${JWT_SECRET}
-  access-ttl: ${JWT_TTL}

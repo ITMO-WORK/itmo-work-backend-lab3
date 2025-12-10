@@ -6,17 +6,7 @@ spring:
     name: eureka-server
 
   profiles:
-    active: ${PROFILE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:dev}
 
   config:
-    import: configserver:http://localhost:9991
-    activate:
-      on-profile: dev
-
-eureka:
-  client:
-    register-with-eureka: false
-    fetch-registry: false
-  server:
-    enable-self-preservation: false
-
+    import: configserver:http://config-server:9991
