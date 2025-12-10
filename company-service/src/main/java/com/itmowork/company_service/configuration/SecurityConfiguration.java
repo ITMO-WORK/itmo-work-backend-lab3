@@ -1,5 +1,6 @@
 package com.itmowork.company_service.configuration;
 
+import com.itmowork.company_service.configuration.handler.CustomAuthenticationEntryPointHandler;
 import com.itmowork.company_service.configuration.jwtConfiguration.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -17,6 +18,8 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 public class SecurityConfiguration {
 
     private final JwtFilter jwtFilter;
+    private final CustomAuthenticationEntryPointHandler customAuthenticationEntryPointHandler;
+
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity serverHttpRequest){
@@ -24,6 +27,10 @@ public class SecurityConfiguration {
         serverHttpRequest.csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
+
+        serverHttpRequest.exceptionHandling(ex -> ex
+                .authenticationEntryPoint(customAuthenticationEntryPointHandler)
+        );
 
         serverHttpRequest.authorizeExchange(auth -> auth
                 .pathMatchers(

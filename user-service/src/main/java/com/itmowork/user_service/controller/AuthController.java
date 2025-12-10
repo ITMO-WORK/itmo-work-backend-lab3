@@ -23,7 +23,6 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    @PreAuthorize("hasAnyRole('ADMIN')")
     public Mono<AuthResponseDto> register(@RequestBody @Valid Mono<UserRequestDto> userRequestDto){
         return userRequestDto
                 .flatMap(authService::registerUser)
@@ -31,7 +30,6 @@ public class AuthController {
     }
 
     @PostMapping("/register-company-owner")
-    @PreAuthorize("hasAnyRole('ADMIN')")
     public Mono<AuthResponseDto> registerCompanyOwner(@RequestBody @Valid Mono<UserRequestDto> userRequestDto){
         return userRequestDto
                 .flatMap(authService::registerCompanyOwner)

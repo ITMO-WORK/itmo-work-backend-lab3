@@ -6,6 +6,9 @@ import com.itmowork.company_service.exception.exceptions.CompanyStatusNotFoundEx
 import com.itmowork.company_service.exception.exceptions.UserClientException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
@@ -48,5 +51,11 @@ public class GlobalExceptionHandler {
     public Mono<ProblemDetail> handleCompanyNotFoundException(CompanyNotFoundException ex, ServerWebExchange exchange){
 
         return Mono.just(ProblemDetailsUtils.problemDetail(HttpStatus.NOT_FOUND, "Company not found", ex.getMessage(), exchange));
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ProblemDetail> companyNotPublishedExceptionHandler(BadCredentialsException ex, ServerWebExchange exchange){
+        ProblemDetail body = ProblemDetailsUtils.problemDetail(HttpStatus.UNAUTHORIZED, "Token incorrect", ex.getMessage(), exchange);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
     }
 }

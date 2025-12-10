@@ -212,7 +212,7 @@ public class CompanyServiceImpl implements CompanyService {
             if (token == null) return Mono.error(new BadCredentialsException("Not authorized"));
 
             return Mono.fromCallable(() -> {
-                        return userClient.registerCompanyOwner(userRequestDto, "Bearer " + token);
+                        return userClient.registerCompanyOwner(userRequestDto, token);
                     })
                     .subscribeOn(Schedulers.boundedElastic())
                     .transformDeferred(CircuitBreakerOperator.of(cb))

@@ -32,14 +32,12 @@ public class SecurityConfiguration {
          serverHttpRequest.csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
-
-                serverHttpRequest.authorizeExchange(auth -> auth
-                        .pathMatchers(
-                                "/api/auth/**",
-                                "/api/user/create"
-                        ).permitAll()
-                        .anyExchange().authenticated()
-                ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
+                serverHttpRequest.authorizeExchange(ex -> ex
+                .pathMatchers("/api/auth/login").permitAll()
+                .pathMatchers("/api/auth/register").hasRole("ADMIN")
+                .pathMatchers("/api/auth/register-company-owner").hasRole("ADMIN")
+                .anyExchange().authenticated()
+        )   .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
                 return serverHttpRequest.build();
 
     }
