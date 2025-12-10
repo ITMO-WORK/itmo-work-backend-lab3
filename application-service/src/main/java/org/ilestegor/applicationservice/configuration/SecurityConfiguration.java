@@ -33,7 +33,15 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
 
         serverHttpRequest.authorizeExchange(auth -> auth
-                .pathMatchers("/api/auth/**").permitAll()
+                .pathMatchers(
+                        "/api/auth/**",
+                        "/api/user/create",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/webjars/**",
+                        "/swagger-ui/index.html",
+                        "/v3/api-docs/**"
+                ).permitAll()
                 .anyExchange().authenticated()
         ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
         serverHttpRequest.exceptionHandling(handler -> handler

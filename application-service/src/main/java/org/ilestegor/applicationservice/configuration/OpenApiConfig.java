@@ -3,6 +3,10 @@ package org.ilestegor.applicationservice.configuration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import io.swagger.v3.core.jackson.ModelResolver;
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.info.Info;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
@@ -20,7 +24,7 @@ public class OpenApiConfig {
     }
 
     @Bean
-    public OpenAPI applicationOpenAPI() {
+    public OpenAPI companyOpenAPI() {
         return new OpenAPI()
                 .servers(List.of(
                         new Server().url("http://localhost:8765")
