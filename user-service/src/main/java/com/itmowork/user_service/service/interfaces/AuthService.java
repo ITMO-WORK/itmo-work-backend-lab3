@@ -9,5 +9,7 @@ public interface AuthService {
 
     Mono<AuthResponseDto> registerUser(UserRequestDto userRequestDto);
 
+    Mono<AuthResponseDto> registerCompanyOwner(UserRequestDto userRequestDto);
+
     Mono<AuthResponseDto> loginUser(LoginRequestDto loginRequestDto);
 }

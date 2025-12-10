@@ -40,32 +40,12 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public Mono<AuthResponseDto> registerUser(UserRequestDto userRequestDto) {
-        String email = userRequestDto.email();
-        String rawPassword = userRequestDto.password();
+        return registerUserByRoles(userRequestDto, RoleName.ROLE_USER);
+    }
 
-        return Mono.fromCallable(() -> userRepository.findUserByEmail(email))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(optionalUser -> {
-                    if (optionalUser.isPresent()) {
-                        return Mono.error(new UserAlreadyExistsException("User already exists"));
-                    }
-
-                    return Mono.fromCallable(() -> {
-
-                        Role defaultRole = roleService.findRoleByRoleName(RoleName.ROLE_USER)
-                                .orElseThrow(() -> new RoleNotFoundException("Default role ROLE_USER not found"));
-
-                        User newUser = User.builder()
-                                .fullName(userRequestDto.fullName())
-                                .email(email)
-                                .password(passwordEncoder.encode(rawPassword))
-                                .role(List.of(defaultRole))
-                                .build();
-
-                        return userRepository.save(newUser);
-                    }).subscribeOn(Schedulers.boundedElastic());
-                })
-                .flatMap(this::generateAuthResponse);
+    @Override
+    public Mono<AuthResponseDto> registerCompanyOwner(UserRequestDto userRequestDto) {
+        return registerUserByRoles(userRequestDto, RoleName.ROLE_COMPANY_OWNER);
     }
 
 
@@ -85,6 +65,34 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(this::generateAuthResponse);
     }
 
+    private Mono<AuthResponseDto> registerUserByRoles(UserRequestDto userRequestDto, RoleName roleName){
+        String email = userRequestDto.email();
+        String rawPassword = userRequestDto.password();
+
+        return Mono.fromCallable(() -> userRepository.findUserByEmail(email))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(optionalUser -> {
+                    if (optionalUser.isPresent()) {
+                        return Mono.error(new UserAlreadyExistsException("User already exists"));
+                    }
+
+                    return Mono.fromCallable(() -> {
+
+                        Role defaultRole = roleService.findRoleByRoleName(roleName)
+                                .orElseThrow(() -> new RoleNotFoundException("Default role " + roleName + " not found"));
+
+                        User newUser = User.builder()
+                                .fullName(userRequestDto.fullName())
+                                .email(email)
+                                .password(passwordEncoder.encode(rawPassword))
+                                .role(List.of(defaultRole))
+                                .build();
+
+                        return userRepository.save(newUser);
+                    }).subscribeOn(Schedulers.boundedElastic());
+                })
+                .flatMap(this::generateAuthResponse);
+    }
 
     private Mono<AuthResponseDto> generateAuthResponse(User user) {
         Authentication authentication = buildJwtAuthentication(user);
