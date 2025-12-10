@@ -90,12 +90,14 @@ public class VacancyController {
     }
 
     @GetMapping("/{vacancyId}/company-id")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER', 'EMPLOYEE')")
     public ResponseEntity<UUID> getCompanyIdByVacancy(@PathVariable UUID vacancyId) {
         UUID companyId = vacancyService.findCompanyIdByVacancyId(vacancyId);
         return ResponseEntity.ok(companyId);
     }
 
     @GetMapping("/{id}/title")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER', 'EMPLOYEE')")
     public ResponseEntity<String> getVacancyTitle(@PathVariable UUID id) {
         return ResponseEntity.ok(vacancyService.getVacancyTitle(id));
     }
