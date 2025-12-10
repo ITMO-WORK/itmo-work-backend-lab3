@@ -33,7 +33,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/actuator/**",
                                 "/api/company/**",
-                                "/api/vacancies"
+                                "/api/vacancies",
+                                "/api/vacancies/*/is-published",
+                                "/api/vacancies/*/exists"
                         ).permitAll()
                         .anyExchange().authenticated()
                 ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)
