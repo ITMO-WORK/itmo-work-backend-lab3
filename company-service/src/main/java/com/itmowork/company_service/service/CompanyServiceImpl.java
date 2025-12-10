@@ -1,6 +1,7 @@
 package com.itmowork.company_service.service;
 
 import com.itmowork.company_service.client.UserClient;
+import com.itmowork.company_service.configuration.UserPrincipal;
 import com.itmowork.company_service.dto.request.CompanyRequestDto;
 import com.itmowork.company_service.dto.request.CompanyUpdateRequestDto;
 import com.itmowork.company_service.dto.request.UserRequestDto;
@@ -27,6 +28,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -104,60 +107,42 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     @Transactional
-    public Mono<CompanyResponseDto> updateCompany(UUID id, UUID userId, CompanyUpdateRequestDto companyUpdateRequestDto) {
-        return findUserById(userId)
+    public Mono<CompanyResponseDto> updateCompany(UUID id, CompanyUpdateRequestDto companyUpdateRequestDto) {
+        return getUserId()
+                .flatMap(userId ->
+                        userCompanyService.validateCompanyOwnership(id, userId)
+                                .filter(Boolean::booleanValue)
+                                .switchIfEmpty(Mono.error(
+                                        new CompanyNotFoundException("Компания не принадлежит пользователю")
+                                ))
+                                .flatMap(valid -> companyRepository.findCompanyById(id))
+                                .switchIfEmpty(Mono.error(
+                                        new CompanyNotFoundException("Компания не найдена")
+                                ))
+                                .flatMap(company -> {
 
-                .onErrorResume(FeignException.NotFound.class, e ->
-                        Mono.error(new UserClientException(
-                                        "Пользователь " + userId + " не найден",
-                                        HttpStatus.NOT_FOUND)))
-                .onErrorResume(FeignException.class, Mono::error)
+                                    if (companyUpdateRequestDto.name() != null) company.setName(companyUpdateRequestDto.name());
+                                    if (companyUpdateRequestDto.email() != null) company.setEmail(companyUpdateRequestDto.email());
+                                    if (companyUpdateRequestDto.description() != null) company.setDescription(companyUpdateRequestDto.description());
 
-                .flatMap(user -> userCompanyService.validateCompanyOwnership(id, userId))
-                .filter(Boolean::booleanValue)
-                .switchIfEmpty(
-                        Mono.error(new CompanyNotFoundException(
-                        "Компания с таким пользователем не найдена"
-                )))
-
-                .flatMap(valid -> companyRepository.findCompanyById(id))
-
-                .flatMap(company -> {
-                    if(companyUpdateRequestDto.name() != null){
-                        company.setName(companyUpdateRequestDto.name());
-                    }
-
-                    if(companyUpdateRequestDto.email() != null){
-                        company.setEmail(companyUpdateRequestDto.email());
-                    }
-
-                    if(companyUpdateRequestDto.description() != null){
-                        company.setDescription(companyUpdateRequestDto.description());
-                    }
-
-                    return companyRepository.save(company);
-                })
-                .map(companySaved -> {
-                    return CompanyResponseDto.builder()
-                            .id(companySaved.getId())
-                            .name(companySaved.getName())
-                            .email(companySaved.getEmail())
-                            .description(companySaved.getDescription())
-                            .statusMessage("Компания была успешно обновлена")
-                            .userId(userId)
-                            .build();
-                });
+                                    return companyRepository.save(company);
+                                })
+                                .map(saved -> CompanyResponseDto.builder()
+                                        .id(saved.getId())
+                                        .name(saved.getName())
+                                        .email(saved.getEmail())
+                                        .description(saved.getDescription())
+                                        .statusMessage("Компания была успешно обновлена")
+                                        .userId(userId)
+                                        .build()
+                                )
+                );
     }
 
     @Override
-    public Mono<CompanyDeleteResponseDto> deleteCompany(UUID id, UUID userId) {
-        return findUserById(userId)
-                .onErrorResume(FeignException.NotFound.class, e ->
-                        Mono.error(new UserClientException(
-                                "Пользователь " + userId + " не найден",
-                                HttpStatus.NOT_FOUND)))
-
-                .flatMap(user -> userCompanyService.validateCompanyOwnership(id, userId))
+    public Mono<CompanyDeleteResponseDto> deleteCompany(UUID id) {
+        return getUserId()
+                .flatMap(userId -> userCompanyService.validateCompanyOwnership(id, userId))
                 .filter(Boolean::booleanValue)
                 .switchIfEmpty(
                         Mono.error(new CompanyNotFoundException(
@@ -227,6 +212,13 @@ public class CompanyServiceImpl implements CompanyService {
                 .subscribeOn(Schedulers.boundedElastic())
                 .transformDeferred(CircuitBreakerOperator.of(cb))
                 .onErrorResume(this::findUserByIdFallback);
+    }
+
+    private Mono<UUID> getUserId() {
+        return ReactiveSecurityContextHolder.getContext()
+                .map(SecurityContext::getAuthentication)
+                .map(auth -> (UserPrincipal) auth.getPrincipal())
+                .map(UserPrincipal::userId);
     }
 
     private Company getCompany(CompanyRequestDto companyRequestDto, CompanyStatus companyStatus){

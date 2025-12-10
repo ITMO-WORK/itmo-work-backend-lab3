@@ -5,6 +5,7 @@ import com.itmowork.company_service.configuration.jwtConfiguration.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
@@ -33,11 +34,16 @@ public class SecurityConfiguration {
         );
 
         serverHttpRequest.authorizeExchange(auth -> auth
+                .pathMatchers(HttpMethod.GET, "/api/company").permitAll()
                 .pathMatchers(
                         "/api/company/register-company",
                         "/swagger-ui/**",
                         "/v3/api-docs/**"
                 ).permitAll()
+                .pathMatchers("/api/company/update/*")
+                .hasAnyRole("ADMIN", "COMPANY_OWNER")
+                .pathMatchers("/api/company/delete/*")
+                .hasAnyRole("ADMIN", "COMPANY_OWNER")
                 .anyExchange().authenticated()
         ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
         return serverHttpRequest.build();

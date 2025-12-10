@@ -13,7 +13,8 @@ public class TokenExtractorFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String token = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-
+        if (token == null)
+            return chain.filter(exchange);
         return chain.filter(exchange).contextWrite(ctx -> ctx.put("authToken", token));
     }
 }

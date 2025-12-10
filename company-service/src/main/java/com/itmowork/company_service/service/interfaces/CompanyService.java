@@ -14,9 +14,9 @@ public interface CompanyService {
 
     Mono<CompanyResponseDto> createCompany(CompanyRequestDto companyRequestDto);
 
-    Mono<CompanyResponseDto> updateCompany(UUID id, UUID userId, CompanyUpdateRequestDto companyUpdateRequestDto);
+    Mono<CompanyResponseDto> updateCompany(UUID id, CompanyUpdateRequestDto companyUpdateRequestDto);
 
-    Mono<CompanyDeleteResponseDto> deleteCompany(UUID id, UUID userId);
+    Mono<CompanyDeleteResponseDto> deleteCompany(UUID id);
 
     Mono<Page<CompanyResponseDto>> getAllCompanies(Pageable pageable);
 

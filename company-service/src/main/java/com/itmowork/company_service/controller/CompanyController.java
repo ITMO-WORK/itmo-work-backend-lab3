@@ -34,17 +34,17 @@ public class CompanyController {
                         ResponseEntity.status(HttpStatus.CREATED).body(companyResponseDto));
     }
 
-    @PatchMapping("/update-company/{id}/{userId}")
-    public Mono<ResponseEntity<CompanyResponseDto>> updateCompany(@PathVariable UUID id, @PathVariable UUID userId, @RequestBody @Valid Mono<CompanyUpdateRequestDto> companyUpdateRequestDto){
+    @PatchMapping("/update-company/{id}")
+    public Mono<ResponseEntity<CompanyResponseDto>> updateCompany(@PathVariable UUID id, @RequestBody @Valid Mono<CompanyUpdateRequestDto> companyUpdateRequestDto){
         return companyUpdateRequestDto
-                .flatMap(requestDto -> companyService.updateCompany(id, userId, requestDto))
+                .flatMap(requestDto -> companyService.updateCompany(id, requestDto))
                 .map(companyResponseDto ->
                         ResponseEntity.status(HttpStatus.OK).body(companyResponseDto));
     }
 
-    @DeleteMapping("/delete/{id}/{userId}")
-    public Mono<ResponseEntity<CompanyDeleteResponseDto>> deleteCompany(@PathVariable UUID id, @PathVariable UUID userId){
-        return Mono.from(companyService.deleteCompany(id, userId)
+    @DeleteMapping("/delete/{id}")
+    public Mono<ResponseEntity<CompanyDeleteResponseDto>> deleteCompany(@PathVariable UUID id){
+        return Mono.from(companyService.deleteCompany(id)
                 .map(companyDeleteResponseDto ->
                         ResponseEntity.status(HttpStatus.OK).body(companyDeleteResponseDto)));
     }
