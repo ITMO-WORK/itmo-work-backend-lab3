@@ -36,6 +36,14 @@ public class SecurityConfiguration {
                 .pathMatchers("/api/auth/login").permitAll()
                 .pathMatchers("/api/auth/register").hasRole("ADMIN")
                 .pathMatchers("/api/auth/register-company-owner").hasRole("ADMIN")
+                .pathMatchers(
+                        "/api/user/create",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/webjars/**",
+                        "/swagger-ui/index.html",
+                        "/v3/api-docs/**"
+                ).permitAll()
                 .anyExchange().authenticated()
         )   .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
                 return serverHttpRequest.build();

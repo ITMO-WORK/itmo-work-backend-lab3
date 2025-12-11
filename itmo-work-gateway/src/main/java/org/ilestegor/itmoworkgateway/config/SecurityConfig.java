@@ -30,13 +30,14 @@ public class SecurityConfig {
                                 "api/company",
                                 "/api/user/create",
                                 "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/webjars/**",
+                                "/swagger-ui/index.html",
                                 "/v3/api-docs/**",
                                 "/actuator/**",
                                 "/api/vacancies",
-                                "/api/vacancies/*/title",
                                 "/api/vacancies/*/is-published",
-                                "/api/vacancies/*/exists",
-                                "/api/vacancies/*/company-id"
+                                "/api/vacancies/*/exists"
                         ).permitAll()
                         .anyExchange().authenticated()
                 ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)

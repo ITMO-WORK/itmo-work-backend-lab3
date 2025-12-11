@@ -21,6 +21,7 @@ repositories {
 extra["springCloudVersion"] = "2025.0.0"
 
 dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-security")
     testImplementation("org.springframework.cloud:spring-cloud-contract-wiremock")
     implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-client")
     implementation("org.springframework.cloud:spring-cloud-starter-config")
@@ -33,6 +34,7 @@ dependencies {
     testImplementation("org.testcontainers:db2")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.springframework.cloud:spring-cloud-starter-contract-stub-runner")
+    testImplementation("org.springframework.security:spring-security-test")
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -45,6 +47,9 @@ dependencies {
     implementation("org.mapstruct:mapstruct:1.6.3")
     annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
+    implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 }
 
 dependencyManagement {

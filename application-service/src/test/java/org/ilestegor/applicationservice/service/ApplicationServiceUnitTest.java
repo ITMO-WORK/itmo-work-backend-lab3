@@ -1,6 +1,7 @@
 package org.ilestegor.applicationservice.service;
 
 
+import org.ilestegor.applicationservice.configuration.UserPrincipal;
 import org.ilestegor.applicationservice.dto.ApplicationDto;
 import org.ilestegor.applicationservice.dto.request.ApplicationCreateRequestDto;
 import org.ilestegor.applicationservice.dto.request.ApplicationStatusUpdateRequestDto;
@@ -18,90 +19,117 @@ import org.ilestegor.applicationservice.model.ApplicationStatusName;
 import org.ilestegor.applicationservice.repository.ApplicationRepository;
 import org.ilestegor.applicationservice.service.interfaces.ApplicationStatusService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(org.mockito.junit.jupiter.MockitoExtension.class)
+@ExtendWith(MockitoExtension.class)
 class ApplicationServiceUnitTest {
+
     @Mock
     private UserClient userClient;
-
     @Mock
     private VacancyClient vacancyClient;
-
     @Mock
     private CompanyClient companyClient;
-
     @Mock
     private ApplicationRepository applicationRepository;
-
     @Mock
     private ApplicationStatusService applicationStatusService;
-
     @Mock
     private ApplicationMapper applicationMapper;
 
     @InjectMocks
     private ApplicationServiceImpl applicationService;
 
+    private static final String BEARER_TOKEN = "test-jwt";
+
     private UUID vacancyId;
     private UUID userId;
+    private Authentication auth;
 
     @BeforeEach
     void setUp() {
         vacancyId = UUID.randomUUID();
         userId = UUID.randomUUID();
+        auth = buildAuth();
+    }
+
+    private Authentication buildAuth() {
+        var principal = new UserPrincipal(
+                "john@example.com",
+                userId
+        );
+
+        return new UsernamePasswordAuthenticationToken(
+                principal,
+                BEARER_TOKEN,
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+    }
+
+    private <T> Mono<T> withAuth(Mono<T> mono) {
+        return mono
+                .contextWrite(ctx -> ctx.put("authToken", BEARER_TOKEN))
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
     }
 
     @Nested
     class CreateApplicationTests {
         @Test
         void shouldCreateApplicationSuccessfully() {
-
-            ApplicationCreateRequestDto request = new ApplicationCreateRequestDto("cover letter");
+            ApplicationCreateRequestDto request =
+                    new ApplicationCreateRequestDto("cover letter");
 
             UserResponseDto userDto = new UserResponseDto(
                     userId,
                     "John Doe",
                     "john@example.com"
             );
-            when(userClient.isUserExistsById(userId)).thenReturn(userDto);
 
+            when(userClient.isUserExistsById(eq(userId), eq(BEARER_TOKEN)))
+                    .thenReturn(userDto);
 
-            when(vacancyClient.isVacancyExists(vacancyId)).thenReturn(true);
+            when(vacancyClient.isVacancyExists(eq(vacancyId), eq(BEARER_TOKEN)))
+                    .thenReturn(true);
 
-
-            when(vacancyClient.isVacancyPublished(vacancyId)).thenReturn(true);
-
+            when(vacancyClient.isVacancyPublished(eq(vacancyId), eq(BEARER_TOKEN)))
+                    .thenReturn(true);
 
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(false));
-
 
             ApplicationStatus status = new ApplicationStatus(
                     1L,
                     ApplicationStatusName.NEW
             );
 
-            when(applicationStatusService.findApplicationStatusByApplicationStatusName(ApplicationStatusName.NEW))
+            when(applicationStatusService
+                    .findApplicationStatusByApplicationStatusName(ApplicationStatusName.NEW))
                     .thenReturn(Mono.just(status));
-
 
             var savedApp = Application.builder()
                     .id(UUID.randomUUID())
@@ -116,10 +144,8 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.save(any(Application.class)))
                     .thenReturn(Mono.just(savedApp));
 
-
             Mono<ApplicationCreateResponseDto> result =
-                    applicationService.createApplication(vacancyId, userId, request);
-
+                    withAuth(applicationService.createApplication(vacancyId, request));
 
             StepVerifier.create(result)
                     .assertNext(dto -> {
@@ -141,7 +167,7 @@ class ApplicationServiceUnitTest {
                     "Test",
                     "t@mail.com"
             );
-            when(userClient.isUserExistsById(userId)).thenReturn(mock);
+            when(userClient.isUserExistsById(eq(userId), eq(BEARER_TOKEN))).thenReturn(mock);
 
 
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
@@ -152,9 +178,9 @@ class ApplicationServiceUnitTest {
                     .thenReturn(Mono.empty());
 
 
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.createApplication(vacancyId, userId, request);
 
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.createApplication(vacancyId, request));
 
             StepVerifier.create(result)
                     .expectError(UserNotFoundException.class)
@@ -168,7 +194,7 @@ class ApplicationServiceUnitTest {
                     new ApplicationCreateRequestDto("cover letter");
 
 
-            when(userClient.isUserExistsById(userId))
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
@@ -176,7 +202,7 @@ class ApplicationServiceUnitTest {
                     ));
 
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(false);
 
 
@@ -192,7 +218,7 @@ class ApplicationServiceUnitTest {
 
 
             Mono<ApplicationCreateResponseDto> result =
-                    applicationService.createApplication(vacancyId, userId, request);
+                    withAuth(applicationService.createApplication(vacancyId, request));
 
 
             StepVerifier.create(result)
@@ -207,22 +233,22 @@ class ApplicationServiceUnitTest {
                     new ApplicationCreateRequestDto("cover letter");
 
 
-            when(userClient.isUserExistsById(userId))
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.isVacancyPublished(vacancyId))
+
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(false);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(false));
 
@@ -233,11 +259,11 @@ class ApplicationServiceUnitTest {
                             ApplicationStatusName.NEW
                     )));
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.createApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.createApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(VacancyNotPublishedException.class)
                     .verify();
@@ -245,30 +271,30 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserAlreadyApplied() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.isVacancyPublished(vacancyId))
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(true));
 
-            
+
             when(applicationStatusService
                     .findApplicationStatusByApplicationStatusName(ApplicationStatusName.NEW))
                     .thenReturn(Mono.just(new ApplicationStatus(
@@ -276,11 +302,11 @@ class ApplicationServiceUnitTest {
                             ApplicationStatusName.NEW
                     )));
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.createApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                   withAuth( applicationService.createApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserHasAlreadyAppliedException.class)
                     .verify();
@@ -288,39 +314,39 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenApplicationStatusNotFound() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.isVacancyPublished(vacancyId))
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(false));
 
-            
+
             when(applicationStatusService
                     .findApplicationStatusByApplicationStatusName(ApplicationStatusName.NEW))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.createApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.createApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(ApplicationStatusNotFoundException.class)
                     .verify();
@@ -331,31 +357,31 @@ class ApplicationServiceUnitTest {
     class UpdateApplicationTests {
         @Test
         void shouldUpdateApplicationSuccessfully() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("updated cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "John Doe",
                             "john@example.com"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.isVacancyPublished(vacancyId))
+
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(true));
 
-            
+
             Application existing = Application.builder()
                     .id(UUID.randomUUID())
                     .userId(userId)
@@ -369,7 +395,7 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findApplicationsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(existing));
 
-            
+
             doAnswer(invocation -> {
                 Application app = invocation.getArgument(0, Application.class);
                 ApplicationCreateRequestDto dto = invocation.getArgument(1, ApplicationCreateRequestDto.class);
@@ -377,7 +403,7 @@ class ApplicationServiceUnitTest {
                 return null;
             }).when(applicationMapper).update(any(Application.class), any(ApplicationCreateRequestDto.class));
 
-            
+
             Application saved = Application.builder()
                     .id(existing.getId())
                     .userId(userId)
@@ -391,7 +417,7 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.save(any(Application.class)))
                     .thenReturn(Mono.just(saved));
 
-            
+
             ApplicationStatus status = new ApplicationStatus(
                     1L,
                     ApplicationStatusName.NEW
@@ -400,11 +426,11 @@ class ApplicationServiceUnitTest {
             when(applicationStatusService.findApplicationStatusByApplicationStatusId(saved.getStatus()))
                     .thenReturn(Mono.just(status));
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.updateApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .assertNext(dto -> {
                         assertEquals(saved.getId(), dto.id());
@@ -416,12 +442,12 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserNotFound() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             null,
                             "Test",
@@ -436,9 +462,9 @@ class ApplicationServiceUnitTest {
                     .thenReturn(Mono.just(Application.builder().build()));
 
             Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
+                    withAuth(applicationService.updateApplication(vacancyId, request));
 
-            
+
             StepVerifier.create(result)
                     .expectError(UserNotFoundException.class)
                     .verify();
@@ -447,23 +473,23 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenVacancyNotFound() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(false);
 
-            
+
 
 
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
@@ -472,11 +498,11 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findApplicationsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(Application.builder().build()));
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.updateApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(VacancyNotFoundException.class)
                     .verify();
@@ -484,27 +510,27 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenVacancyNotPublished() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.isVacancyPublished(vacancyId))
+
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(false);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(true));
 
@@ -512,9 +538,9 @@ class ApplicationServiceUnitTest {
                     .thenReturn(Mono.just(Application.builder().build()));
 
             Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
+                    withAuth(applicationService.updateApplication(vacancyId, request));
 
-            
+
             StepVerifier.create(result)
                     .expectError(VacancyNotPublishedException.class)
                     .verify();
@@ -523,38 +549,38 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserHasNotAppliedYet() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.isVacancyPublished(vacancyId))
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(false));
 
-            
+
             when(applicationRepository.findApplicationsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.updateApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserApplicationNotFoundException.class)
                     .verify();
@@ -562,37 +588,37 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenApplicationNotFoundForUpdate() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.isVacancyPublished(vacancyId))
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(true));
 
-            
+
             when(applicationRepository.findApplicationsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.updateApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserApplicationNotFoundException.class)
                     .verify();
@@ -600,29 +626,29 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenApplicationStatusNotFoundOnUpdate() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.isVacancyPublished(vacancyId))
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(true));
 
-            
+
             Application existing = Application.builder()
                     .id(UUID.randomUUID())
                     .userId(userId)
@@ -641,15 +667,15 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.save(any(Application.class)))
                     .thenReturn(Mono.just(existing));
 
-            
+
             when(applicationStatusService.findApplicationStatusByApplicationStatusId(existing.getStatus()))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.updateApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(ApplicationStatusNotFoundException.class)
                     .verify();
@@ -657,29 +683,29 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenApplicationStatusIsNotNewOnUpdate() {
-            
+
             ApplicationCreateRequestDto request =
                     new ApplicationCreateRequestDto("cover letter");
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.isVacancyPublished(vacancyId))
+            when(vacancyClient.isVacancyPublished(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             when(applicationRepository.existsByUserIdAndVacancyId(userId, vacancyId))
                     .thenReturn(Mono.just(true));
 
-            
+
             Application existing = Application.builder()
                     .id(UUID.randomUUID())
                     .userId(userId)
@@ -698,19 +724,19 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.save(any(Application.class)))
                     .thenReturn(Mono.just(existing));
 
-            
+
             ApplicationStatus status = new ApplicationStatus(
                     2L,
-                    ApplicationStatusName.VIEWED 
+                    ApplicationStatusName.VIEWED
             );
             when(applicationStatusService.findApplicationStatusByApplicationStatusId(existing.getStatus()))
                     .thenReturn(Mono.just(status));
 
-            
-            Mono<ApplicationCreateResponseDto> result =
-                    applicationService.updateApplication(vacancyId, userId, request);
 
-            
+            Mono<ApplicationCreateResponseDto> result =
+                    withAuth(applicationService.updateApplication(vacancyId, request));
+
+
             StepVerifier.create(result)
                     .expectError(InvalidApplicationStatusForApplicationUpdate.class)
                     .verify();
@@ -731,34 +757,34 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldUpdateApplicationStatusSuccessfully() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "John Doe",
                             "john@example.com"
                     ));
 
-            
+
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.just(vacancyId));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            when(companyClient.isUserBelongsToCompany(companyId, userId))
+            when(companyClient.isUserBelongsToCompany(companyId, userId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             Application application = Application.builder()
                     .id(applicationId)
                     .userId(userId)
@@ -769,10 +795,13 @@ class ApplicationServiceUnitTest {
                     .status(1L)
                     .build();
 
+            when(applicationRepository.existsById(applicationId))
+                    .thenReturn(Mono.just(true));
+
             when(applicationRepository.findById(applicationId))
                     .thenReturn(Mono.just(application));
 
-            
+
             ApplicationStatus newStatus = new ApplicationStatus(
                     2L,
                     ApplicationStatusName.NEW
@@ -782,7 +811,7 @@ class ApplicationServiceUnitTest {
                     .findApplicationStatusByApplicationStatusName(request.applicationStatusName()))
                     .thenReturn(Mono.just(newStatus));
 
-            
+
             Application saved = Application.builder()
                     .id(application.getId())
                     .userId(application.getUserId())
@@ -796,11 +825,11 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.save(any(Application.class)))
                     .thenReturn(Mono.just(saved));
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .assertNext(dto -> {
                         assertEquals(newStatus.getApplicationStatusName().getValue(), dto.status());
@@ -811,27 +840,27 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserNotFound() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             null,
                             "Test",
                             "t@mail.com"
                     ));
 
-            
+
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.just(vacancyId));
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserNotFoundException.class)
                     .verify();
@@ -839,27 +868,27 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenVacancyIdNotFoundByApplication() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
                             "e"
                     ));
 
-            
+
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserApplicationNotFoundException.class)
                     .verify();
@@ -867,12 +896,12 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenVacancyNotFound() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
@@ -882,20 +911,22 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.just(vacancyId));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(false);
 
+            when(applicationRepository.existsById(applicationId))
+                    .thenReturn(Mono.just(true));
 
             when(applicationRepository.findById(applicationId))
                     .thenReturn(Mono.just(Application.builder().build()));
 
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .expectError(VacancyNotFoundException.class)
                     .verify();
@@ -903,12 +934,12 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserDoesNotBelongToCompany() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
@@ -918,27 +949,29 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.just(vacancyId));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            
-            when(companyClient.isUserBelongsToCompany(companyId, userId))
-                    .thenReturn(false);
 
-            
+            when(companyClient.isUserBelongsToCompany(companyId, userId, BEARER_TOKEN))
+                    .thenReturn(false);
+            when(applicationRepository.existsById(applicationId))
+                    .thenReturn(Mono.just(true));
+
+
             when(applicationRepository.findById(applicationId))
                     .thenReturn(Mono.just(Application.builder().build()));
 
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserDoesNotBelongsToCompanyException.class)
                     .verify();
@@ -946,12 +979,12 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenApplicationNotFoundById() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
@@ -961,24 +994,25 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.just(vacancyId));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            when(companyClient.isUserBelongsToCompany(companyId, userId))
+            when(companyClient.isUserBelongsToCompany(companyId, userId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+            when(applicationRepository.existsById(applicationId))
+                    .thenReturn(Mono.just(true));
             when(applicationRepository.findById(applicationId))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .expectError(UserApplicationNotFoundException.class)
                     .verify();
@@ -986,12 +1020,12 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenTargetStatusNotFound() {
-            
+
             ApplicationStatusUpdateRequestDto request =
                     new ApplicationStatusUpdateRequestDto(ApplicationStatusName.NEW);
 
-            
-            when(userClient.isUserExistsById(userId))
+
+            when(userClient.isUserExistsById(userId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             userId,
                             "n",
@@ -1001,16 +1035,16 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findVacancyIdById(applicationId))
                     .thenReturn(Mono.just(vacancyId));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            when(companyClient.isUserBelongsToCompany(companyId, userId))
+            when(companyClient.isUserBelongsToCompany(companyId, userId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
+
             Application application = Application.builder()
                     .id(applicationId)
                     .userId(userId)
@@ -1021,19 +1055,21 @@ class ApplicationServiceUnitTest {
                     .status(1L)
                     .build();
 
+            when(applicationRepository.existsById(applicationId))
+                    .thenReturn(Mono.just(true));
             when(applicationRepository.findById(applicationId))
                     .thenReturn(Mono.just(application));
 
-            
+
             when(applicationStatusService
                     .findApplicationStatusByApplicationStatusName(request.applicationStatusName()))
                     .thenReturn(Mono.empty());
 
-            
-            Mono<ApplicationStatusUpdateResponseDto> result =
-                    applicationService.updateApplicationStatus(applicationId, userId, request);
 
-            
+            Mono<ApplicationStatusUpdateResponseDto> result =
+                    withAuth(applicationService.updateApplicationStatus(applicationId, request));
+
+
             StepVerifier.create(result)
                     .expectError(ApplicationStatusNotFoundException.class)
                     .verify();
@@ -1043,15 +1079,15 @@ class ApplicationServiceUnitTest {
     @Nested
     class GetAllApplicationsByVacancyIdTests {
         private UUID vacancyId;
-        private UUID hrUserId;      
-        private UUID applicantId;   
+        private UUID hrUserId;
+        private UUID applicantId;
         private UUID companyId;
         private Pageable pageable;
 
         @BeforeEach
         void init() {
             vacancyId = UUID.randomUUID();
-            hrUserId = userId;                  
+            hrUserId = userId;
             applicantId = UUID.randomUUID();
             companyId = UUID.randomUUID();
             pageable = PageRequest.of(0, 10);
@@ -1059,33 +1095,33 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldReturnPageOfApplicationsSuccessfully() {
-            
+
             String vacancyTitle = "Java Developer";
 
-            
-            when(userClient.isUserExistsById(hrUserId))
+
+            when(userClient.isUserExistsById(hrUserId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             hrUserId,
                             "HR User",
                             "hr@mail.com"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            when(companyClient.isUserBelongsToCompany(companyId, hrUserId))
+            when(companyClient.isUserBelongsToCompany(companyId, hrUserId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            
-            when(vacancyClient.getVacancyTitle(vacancyId))
+
+            when(vacancyClient.getVacancyTitle(vacancyId, BEARER_TOKEN))
                     .thenReturn(vacancyTitle);
 
-            
+
             Application app1 = Application.builder()
                     .id(UUID.randomUUID())
                     .userId(applicantId)
@@ -1109,16 +1145,16 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findAllByVacancyId(vacancyId, pageable))
                     .thenReturn(Flux.just(app1, app2));
 
-            
-            when(userClient.isUserExistsById(applicantId))
+
+            when(userClient.isUserExistsById(applicantId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             applicantId,
                             "Applicant Name",
                             "applicant@mail.com"
                     ));
 
-            
-            
+
+
             when(applicationMapper.fromApplicationtoApplicationDto(any(Application.class)))
                     .thenAnswer(invocation -> {
                         Application app = invocation.getArgument(0, Application.class);
@@ -1130,15 +1166,15 @@ class ApplicationServiceUnitTest {
                                 .build();
                     });
 
-            
+
             when(applicationRepository.countApplicationByVacancyId(vacancyId))
                     .thenReturn(Mono.just(2L));
 
-            
-            Mono<Page<ApplicationDto>> result =
-                    applicationService.getAllApplicationsByVacancyId(vacancyId, hrUserId, pageable);
 
-            
+            Mono<Page<ApplicationDto>> result =
+                    withAuth(applicationService.getAllApplicationsByVacancyId(vacancyId, pageable));
+
+
             StepVerifier.create(result)
                     .assertNext(page -> {
                         assertEquals(2, page.getTotalElements());
@@ -1153,8 +1189,8 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserNotFoundAtStart() {
-            
-            when(userClient.isUserExistsById(hrUserId))
+
+            when(userClient.isUserExistsById(hrUserId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             null,
                             "HR",
@@ -1163,11 +1199,11 @@ class ApplicationServiceUnitTest {
 
 
 
-            
-            Mono<Page<ApplicationDto>> result =
-                    applicationService.getAllApplicationsByVacancyId(vacancyId, hrUserId, pageable);
 
-            
+            Mono<Page<ApplicationDto>> result =
+                    withAuth(applicationService.getAllApplicationsByVacancyId(vacancyId, pageable));
+
+
             StepVerifier.create(result)
                     .expectError(UserNotFoundException.class)
                     .verify();
@@ -1175,26 +1211,26 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenVacancyNotFound() {
-            
-            when(userClient.isUserExistsById(hrUserId))
+
+            when(userClient.isUserExistsById(hrUserId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             hrUserId,
                             "HR",
                             "hr@mail.com"
                     ));
 
-            
-            when(vacancyClient.isVacancyExists(vacancyId))
+
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(false);
 
-            
 
 
-            
+
+
             Mono<Page<ApplicationDto>> result =
-                    applicationService.getAllApplicationsByVacancyId(vacancyId, hrUserId, pageable);
+                    withAuth(applicationService.getAllApplicationsByVacancyId(vacancyId, pageable));
 
-            
+
             StepVerifier.create(result)
                     .expectError(VacancyNotFoundException.class)
                     .verify();
@@ -1202,39 +1238,30 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenUserDoesNotBelongToCompany() {
-            
-            when(userClient.isUserExistsById(hrUserId))
+
+            when(userClient.isUserExistsById(hrUserId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             hrUserId,
                             "HR",
                             "hr@mail.com"
                     ));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            
-            when(companyClient.isUserBelongsToCompany(companyId, hrUserId))
+
+            when(companyClient.isUserBelongsToCompany(companyId, hrUserId, BEARER_TOKEN))
                     .thenReturn(false);
 
-            
 
 
-
-
-
-
-
-
-
-            
             Mono<Page<ApplicationDto>> result =
-                    applicationService.getAllApplicationsByVacancyId(vacancyId, hrUserId, pageable);
+                    withAuth(applicationService.getAllApplicationsByVacancyId(vacancyId, pageable));
 
-            
+
             StepVerifier.create(result)
                     .expectError(UserDoesNotBelongsToCompanyException.class)
                     .verify();
@@ -1242,30 +1269,30 @@ class ApplicationServiceUnitTest {
 
         @Test
         void shouldFailWhenInnerUserOfApplicationNotFound() {
-            
+
             String vacancyTitle = "Java Developer";
 
-            
-            when(userClient.isUserExistsById(hrUserId))
+
+            when(userClient.isUserExistsById(hrUserId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             hrUserId,
                             "HR User",
                             "hr@mail.com"
                     ));
 
-            when(vacancyClient.isVacancyExists(vacancyId))
+            when(vacancyClient.isVacancyExists(vacancyId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.getCompanyIdByVacancy(vacancyId))
+            when(vacancyClient.getCompanyIdByVacancy(vacancyId, BEARER_TOKEN))
                     .thenReturn(companyId);
 
-            when(companyClient.isUserBelongsToCompany(companyId, hrUserId))
+            when(companyClient.isUserBelongsToCompany(companyId, hrUserId, BEARER_TOKEN))
                     .thenReturn(true);
 
-            when(vacancyClient.getVacancyTitle(vacancyId))
+            when(vacancyClient.getVacancyTitle(vacancyId, BEARER_TOKEN))
                     .thenReturn(vacancyTitle);
 
-            
+
             Application app = Application.builder()
                     .id(UUID.randomUUID())
                     .userId(applicantId)
@@ -1279,8 +1306,8 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.findAllByVacancyId(vacancyId, pageable))
                     .thenReturn(Flux.just(app));
 
-            
-            when(userClient.isUserExistsById(applicantId))
+
+            when(userClient.isUserExistsById(applicantId, BEARER_TOKEN))
                     .thenReturn(new UserResponseDto(
                             null,
                             "Ghost",
@@ -1292,11 +1319,11 @@ class ApplicationServiceUnitTest {
             when(applicationRepository.countApplicationByVacancyId(vacancyId))
                     .thenReturn(Mono.just(1L));
 
-            
-            Mono<Page<ApplicationDto>> result =
-                    applicationService.getAllApplicationsByVacancyId(vacancyId, hrUserId, pageable);
 
-            
+            Mono<Page<ApplicationDto>> result =
+                    withAuth(applicationService.getAllApplicationsByVacancyId(vacancyId, pageable));
+
+
             StepVerifier.create(result)
                     .expectError(UserNotFoundException.class)
                     .verify();

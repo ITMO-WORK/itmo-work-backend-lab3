@@ -4,7 +4,8 @@ import org.ilestegor.applicationservice.infrastructure.feign.user.dto.UserRespon
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import reactor.core.publisher.Mono;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.http.HttpHeaders;
 
 import java.util.UUID;
 
@@ -12,5 +13,5 @@ import java.util.UUID;
 public interface UserClient {
 
     @GetMapping("/{id}")
-    UserResponseDto isUserExistsById(@PathVariable UUID id);
+    UserResponseDto isUserExistsById(@PathVariable UUID id, @RequestHeader(HttpHeaders.AUTHORIZATION) String token);
 }

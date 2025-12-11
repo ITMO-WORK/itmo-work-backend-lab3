@@ -1,0 +1,170 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - itmo
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+
+  config-server:
+    build: ./config-server
+    container_name: config-server
+    ports:
+      - "9991:9991"
+    networks:
+      - itmo
+    environment:
+      CONFIG_REPO_URI: https://github.com/ITMO-WORK/itmo-work-configs-repo-lab3
+      #      !!! use env file or insert here your credentials
+      USERNAME: ${USERNAME}
+      PASSWORD: ${PASSWORD}
+    volumes:
+      - ./config-repo-cache:/tmp/config-repo
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "http://config-server:9991/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    depends_on:
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "http://eureka-server:8761/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - itmo
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:9991
+      SPRING_CLOUD_CONFIG_FAILFAST: "true"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS: "10"
+      SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL: "1000"
+      SPRING_CLOUD_CONFIG_RETRY_MULTIPLIER: "1.5"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_INTERVAL: "10000"
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - itmo
+    environment:
+      PROFILE: prod
+      CONFIG_SERVER_URL: http://config-server:9991
+      SPRING_CLOUD_CONFIG_FAILFAST: "true"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS: "10"
+      SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL: "1000"
+      SPRING_CLOUD_CONFIG_RETRY_MULTIPLIER: "1.5"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_INTERVAL: "10000"
+
+  company-service:
+    build: ./company-service
+    container_name: company-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - itmo
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CONFIG_SERVER_URL: http://config-server:9991
+      SPRING_CLOUD_CONFIG_FAILFAST: "true"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS: "10"
+      SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL: "1000"
+      SPRING_CLOUD_CONFIG_RETRY_MULTIPLIER: "1.5"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_INTERVAL: "10000"
+
+  vacancy_service:
+    build: ./vacancy_service
+    container_name: vacancy-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - itmo
+    environment:
+      PROFILE: prod
+      SPRING_PROFILES_ACTIVE: prod
+      CONFIG_SERVER_URL: http://config-server:9991
+
+  application-service:
+    build: ./application-service
+    container_name: application-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - itmo
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CONFIG_SERVER_URL: http://config-server:9991
+      SPRING_CLOUD_CONFIG_FAILFAST: "true"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS: "10"
+      SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL: "1000"
+      SPRING_CLOUD_CONFIG_RETRY_MULTIPLIER: "1.5"
+      SPRING_CLOUD_CONFIG_RETRY_MAX_INTERVAL: "10000"
+
+  itmo-work-gateway:
+    build: ./itmo-work-gateway
+    container_name: itmo-work-gateway
+    ports:
+      - "8765:8765"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - itmo
+    environment:
+      PROFILE: prod
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      CONFIG_SERVER_URL: http://config-server:9991
+
+networks:
+  itmo:
+    driver: bridge
+
+volumes:
+  postgres_data:
