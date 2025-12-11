@@ -50,4 +50,19 @@ public class UserServiceImpl implements UserService {
         );
     }
 
+    @Override
+    public Mono<User> findUserByEmail(String email) {
+        return Mono.fromCallable(() -> userRepository.findUserByEmail(email))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(optionalUser ->
+                        optionalUser
+                                .map(Mono::just)   // ← возвращаем User
+                                .orElseGet(Mono::empty)
+                );
+    }
+
+    @Override
+    public Mono<User> saveUser(User user) {
+        return Mono.fromCallable(() -> userRepository.save(user)).subscribeOn(Schedulers.boundedElastic());
+    }
 }
