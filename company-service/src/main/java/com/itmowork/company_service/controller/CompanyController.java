@@ -6,6 +6,7 @@ import com.itmowork.company_service.dto.response.CompanyDeleteResponseDto;
 import com.itmowork.company_service.dto.response.CompanyResponseDto;
 import com.itmowork.company_service.service.interfaces.CompanyService;
 import com.itmowork.company_service.service.interfaces.UserCompanyService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ public class CompanyController {
     private final UserCompanyService userCompanyService;
 
     @PostMapping("/register-company")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<CompanyResponseDto>> createCompany(@RequestBody @Valid Mono<CompanyRequestDto> companyRequestDto){
         return companyRequestDto
                 .flatMap(companyService::createCompany)
@@ -35,6 +37,7 @@ public class CompanyController {
     }
 
     @PatchMapping("/update-company/{id}")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<CompanyResponseDto>> updateCompany(@PathVariable UUID id, @RequestBody @Valid Mono<CompanyUpdateRequestDto> companyUpdateRequestDto){
         return companyUpdateRequestDto
                 .flatMap(requestDto -> companyService.updateCompany(id, requestDto))
@@ -43,6 +46,7 @@ public class CompanyController {
     }
 
     @DeleteMapping("/delete/{id}")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<CompanyDeleteResponseDto>> deleteCompany(@PathVariable UUID id){
         return Mono.from(companyService.deleteCompany(id)
                 .map(companyDeleteResponseDto ->

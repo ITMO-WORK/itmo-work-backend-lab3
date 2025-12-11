@@ -52,7 +52,7 @@ public class JwtFilter implements WebFilter, Ordered {
                             .map(SimpleGrantedAuthority::new)
                             .toList();
 
-            // principal = email, credentials = token (JWT)
+
             Authentication auth = new UsernamePasswordAuthenticationToken(
                     email,
                     token,
