@@ -1,5 +1,6 @@
 package org.itmowork.vacancy_service.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.itmowork.vacancy_service.dto.request.VacancyCreateRequestDto;
@@ -28,6 +29,7 @@ public class VacancyController {
 
     @PatchMapping("/{id}/update-and-change-status")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<VacancyResponseDto> updateAndChangeStatus(
             @PathVariable UUID id,
             @RequestBody @Valid VacancyUpdateRequestDto dto,
@@ -40,6 +42,7 @@ public class VacancyController {
 
     @PatchMapping("/{id}/update")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<VacancyResponseDto> updateVacancy(
             @PathVariable UUID id,
             @RequestBody @Valid VacancyUpdateRequestDto dto
@@ -51,6 +54,7 @@ public class VacancyController {
 
     @PatchMapping("/{id}/change-status")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<VacancyResponseDto> changeStatus(
             @PathVariable UUID id,
             @RequestParam VacancyStatusName newStatus
@@ -62,6 +66,7 @@ public class VacancyController {
 
     @PostMapping("/publish")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<VacancyResponseDto> createPublish(
             @RequestBody @Valid VacancyCreateRequestDto request
     ) {
@@ -73,6 +78,7 @@ public class VacancyController {
 
     @PostMapping("/draft")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER')")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<VacancyResponseDto> createDraft(
             @RequestBody @Valid VacancyCreateRequestDto request
     ) {
