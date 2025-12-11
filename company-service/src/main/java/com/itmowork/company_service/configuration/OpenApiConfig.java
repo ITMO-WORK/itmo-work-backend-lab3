@@ -17,7 +17,7 @@ import java.util.List;
 @Configuration
 @OpenAPIDefinition(
         info = @Info(
-                title = "User Service API",
+                title = "Company Service API",
                 version = "v1"
         )
 )
