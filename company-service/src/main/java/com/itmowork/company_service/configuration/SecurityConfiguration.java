@@ -29,6 +29,11 @@ public class SecurityConfiguration {
                 .pathMatchers(
                         "/api/company/register-company",
                         "/swagger-ui/**",
+                        "/v3/api-docs/**",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/webjars/**",
+                        "/swagger-ui/index.html",
                         "/v3/api-docs/**"
                 ).permitAll()
                 .anyExchange().authenticated()
