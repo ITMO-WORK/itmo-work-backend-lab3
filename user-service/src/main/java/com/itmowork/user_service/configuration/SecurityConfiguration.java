@@ -37,7 +37,7 @@ public class SecurityConfiguration {
                 .pathMatchers("/api/auth/register").hasRole("ADMIN")
                 .pathMatchers("/api/auth/register-company-owner").hasRole("ADMIN")
                 .pathMatchers(
-                        "/api/user/create",
+                        "/api/user",
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/webjars/**",
