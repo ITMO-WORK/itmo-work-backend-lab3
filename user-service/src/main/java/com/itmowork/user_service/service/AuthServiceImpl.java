@@ -59,14 +59,14 @@ public class AuthServiceImpl implements AuthService {
                 new UsernamePasswordAuthenticationToken(email, password);
 
         return reactiveAuthenticationManager
-                .authenticate(authToken)                      // проверили логин/пароль
-                .flatMap(authentication ->                    // если ок — ищем юзера
+                .authenticate(authToken)
+                .flatMap(authentication ->
                         userService.findUserByEmail(email)
                                 .switchIfEmpty(Mono.error(
                                         new BadCredentialsException("User not found")
                                 ))
                 )
-                .flatMap(this::generateAuthResponse);         // генерим JWT + ответ
+                .flatMap(this::generateAuthResponse);
     }
 
     private Mono<AuthResponseDto> registerUserByRoles(UserRequestDto userRequestDto, RoleName roleName) {
