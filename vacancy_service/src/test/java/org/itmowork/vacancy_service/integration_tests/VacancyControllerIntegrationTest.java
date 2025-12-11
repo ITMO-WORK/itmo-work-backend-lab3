@@ -240,7 +240,6 @@ class VacancyControllerIntegrationTest {
         UUID userId = UUID.randomUUID();
         UUID companyId = UUID.randomUUID();
 
-        // заранее создаём вакансию в БД
         Vacancy vacancy = prepareVacancy(companyId);
 
         String token = generateJwt(userId, "employee@example.com", "ROLE_EMPLOYEE");

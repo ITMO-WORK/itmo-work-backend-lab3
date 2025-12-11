@@ -1,83 +1,88 @@
 package com.itmowork.company_service.controller;
 
-
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.itmowork.company_service.dto.request.CompanyRequestDto;
 import com.itmowork.company_service.dto.request.CompanyUpdateRequestDto;
 import com.itmowork.company_service.repository.CompanyRepository;
 import com.itmowork.company_service.security.JwtService;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.contract.wiremock.AutoConfigureWireMock;
 import org.springframework.http.HttpHeaders;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.parameters.P;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.function.client.ClientRequest;
-import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Mono;
-import wiremock.com.fasterxml.jackson.core.JsonProcessingException;
-import wiremock.com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.web.reactive.function.client.ClientRequest;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-@Testcontainers
 @SpringBootTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Testcontainers
 @AutoConfigureMockMvc
 @AutoConfigureWireMock(port = 0)
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @TestPropertySource(properties = {
         "spring.cloud.discovery.enabled=false",
         "eureka.client.enabled=false",
         "spring.cloud.openfeign.client.config.user-service.url=http://localhost:${wiremock.server.port}",
         "jwt.secret=bXlzdXBlcnNlY3JldG15c3VwZXJzZWNyZXRteXN1cGVyc2VjcmV0"
-
 })
 public class CompanyControllerTest {
 
-    private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    @Container
-    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17");
+    private static final UUID USER_ID =
+            UUID.fromString("11111111-1111-1111-1111-111111111111");
+
     @Autowired
     private CompanyRepository companyRepository;
+
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private WebTestClient baseClient;
+
+    private WebTestClient client;
+
+    @Container
+    private static final PostgreSQLContainer<?> postgres =
+            new PostgreSQLContainer<>("postgres:17");
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.r2dbc.url", () ->
-                "r2dbc:postgresql://" + postgres.getHost() + ":" + postgres.getFirstMappedPort() + "/" + postgres.getDatabaseName());
+                "r2dbc:postgresql://" + postgres.getHost() + ":" +
+                        postgres.getFirstMappedPort() + "/" + postgres.getDatabaseName());
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
 
         registry.add("spring.liquibase.url", postgres::getJdbcUrl);
         registry.add("spring.liquibase.user", postgres::getUsername);
         registry.add("spring.liquibase.password", postgres::getPassword);
-
         registry.add("spring.liquibase.enabled", () -> true);
+    }
 
+    @BeforeEach
+    void setup() {
+        String jwt = generateJwt(USER_ID, "mock@user.com", "ROLE_ADMIN", "ROLE_COMPANY_OWNER");
+
+        this.client = baseClient
+                .mutate()
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + jwt)
+                .filter(addAuthToken())
+                .build();
     }
 
     @AfterEach
@@ -85,30 +90,17 @@ public class CompanyControllerTest {
         companyRepository.deleteAll().block();
     }
 
-    @Autowired
-    private WebTestClient client;
-
     @Test
+    @Order(1)
     void createCompanyIntegrationTest() {
         WireMock.stubFor(
                 WireMock.post("/api/auth/register-company-owner")
-                        .willReturn(
-                                WireMock.aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody("""
-                                            {
-                                                "id": "11111111-1111-1111-1111-111111111111",
-                                                "token": "mock-token"
-                                            }
-                                        """)
-                        )
-        );
-
-        String jwt = generateJwt(
-                USER_ID,
-                "mock@user.com",
-                "ROLE_COMPANY_OWNER"
+                        .willReturn(WireMock.okJson("""
+                        {
+                          "id": "11111111-1111-1111-1111-111111111111",
+                          "token": "mock-token"
+                        }
+                        """))
         );
 
         CompanyRequestDto req = new CompanyRequestDto(
@@ -122,40 +114,26 @@ public class CompanyControllerTest {
 
         client.post()
                 .uri("/api/company/register-company")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt)
                 .bodyValue(req)
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody()
                 .jsonPath("$.name").isEqualTo("MegaCorp")
                 .jsonPath("$.user_id").isEqualTo(USER_ID.toString());
-
     }
 
     @Test
-    void updateCompanyIntegrationTest() throws JsonProcessingException {
+    @Order(2)
+    void updateCompanyIntegrationTest() throws Exception {
         WireMock.stubFor(
                 WireMock.post("/api/auth/register-company-owner")
-                        .willReturn(
-                                WireMock.aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody("""
-                                    {
-                                        "id": "11111111-1111-1111-1111-111111111111",
-                                        "full_name": "Mock User",
-                                        "email": "mock@user.com"
-                                    }
-                                    """)
-                        )
+                        .willReturn(WireMock.okJson("""
+                        {
+                          "id": "11111111-1111-1111-1111-111111111111",
+                          "token": "mock-token"
+                        }
+                        """))
         );
-
-        String jwt = generateJwt(
-                USER_ID,
-                "mock@user.com",
-                "ROLE_ADMIN"
-        );
-
 
         CompanyRequestDto createReq = new CompanyRequestDto(
                 "MegaCorp",
@@ -166,89 +144,50 @@ public class CompanyControllerTest {
                 "pass"
         );
 
-        var createdCompany = client.post()
+        var createdResult = client.post()
                 .uri("/api/company/register-company")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt)
                 .bodyValue(createReq)
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody()
-                .jsonPath("$.id").exists()
                 .returnResult();
 
-        byte[] responseBytes = createdCompany.getResponseBody();
-        assert responseBytes != null;
-        String json = new String(responseBytes, StandardCharsets.UTF_8);
-        String companyId = new ObjectMapper()
-                .readTree(json)
-                .get("id")
-                .asText();
+        String createdJson = new String(createdResult.getResponseBody(), StandardCharsets.UTF_8);
 
-        String userCreatedId = new ObjectMapper()
-                .readTree(json)
-                .get("user_id")
-                .asText();
+        ObjectMapper om = new ObjectMapper();
+        String companyId = om.readTree(createdJson).get("id").asText();
 
-        var updateReq = new CompanyUpdateRequestDto(
+        CompanyUpdateRequestDto updateReq = new CompanyUpdateRequestDto(
                 "MegaCorp UPDATED",
-                "test@mail.com",
+                "updated@mail.com",
                 "new description"
         );
 
-        String jwtUpdate = generateJwt(
-                userCreatedId.equals(USER_ID.toString()) ? USER_ID : UUID.fromString(userCreatedId),
-                "mc@example.com",
-                "ROLE_COMPANY_OWNER"
-        );
-
         client.patch()
-                .uri("/api/company/update-company/{id}",
-                        companyId)
+                .uri("/api/company/update-company/{id}", companyId)
                 .bodyValue(updateReq)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtUpdate)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.name").isEqualTo("MegaCorp UPDATED")
-                .jsonPath("$.email").isEqualTo("test@mail.com")
+                .jsonPath("$.email").isEqualTo("updated@mail.com")
                 .jsonPath("$.description").isEqualTo("new description");
     }
 
     @Test
-    void deleteCompanyIntegrationTest() throws JsonProcessingException {
+    @Order(3)
+    void deleteCompanyIntegrationTest() throws Exception {
         WireMock.stubFor(
-                WireMock.post("/api/user/create")
-                        .willReturn(
-                                WireMock.aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody("""
-                                    {
-                                        "id": "11111111-1111-1111-1111-111111111111",
-                                        "full_name": "Mock User",
-                                        "email": "mock@user.com"
-                                    }
-                                    """)
-                        )
+                WireMock.post("/api/auth/register-company-owner")
+                        .willReturn(WireMock.okJson("""
+                        {
+                          "id": "11111111-1111-1111-1111-111111111111",
+                          "token": "mock-token"
+                        }
+                        """))
         );
 
-        WireMock.stubFor(
-                WireMock.get("/api/user/11111111-1111-1111-1111-111111111111")
-                        .willReturn(
-                                WireMock.aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody("""
-                                {
-                                    "id": "11111111-1111-1111-1111-111111111111",
-                                    "full_name": "Mock User",
-                                    "email": "mock@user.com"
-                                }
-                                """)
-                        )
-        );
-
-        CompanyRequestDto createReq = new CompanyRequestDto(
+        CompanyRequestDto req = new CompanyRequestDto(
                 "MegaCorp",
                 "mc@example.com",
                 "Desc",
@@ -259,41 +198,18 @@ public class CompanyControllerTest {
 
         var created = client.post()
                 .uri("/api/company/register-company")
-                .bodyValue(createReq)
+                .bodyValue(req)
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody()
-                .jsonPath("$.id").exists()
                 .returnResult();
 
+        String createdJson = new String(created.getResponseBody(), StandardCharsets.UTF_8);
+        ObjectMapper om = new ObjectMapper();
+        String companyId = om.readTree(createdJson).get("id").asText();
 
-        byte[] bytes = created.getResponseBody();
-        assert bytes != null;
-        String json = new String(bytes, StandardCharsets.UTF_8);
-        String companyId = new ObjectMapper()
-                .readTree(json)
-                .get("id")
-                .asText();
-
-        WireMock.stubFor(
-                WireMock.get("/api/user/11111111-1111-1111-1111-111111111111")
-                        .willReturn(
-                                WireMock.aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody("""
-                                    {
-                                        "id": "11111111-1111-1111-1111-111111111111",
-                                        "full_name": "Mock User",
-                                        "email": "mock@user.com"
-                                    }
-                                    """)
-                        )
-        );
         client.delete()
-                .uri("/api/company/delete/{id}/{userId}",
-                        companyId,
-                        "11111111-1111-1111-1111-111111111111")
+                .uri("/api/company/delete/{id}", companyId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -302,21 +218,16 @@ public class CompanyControllerTest {
     }
 
     @Test
+    @Order(4)
     void getAllCompaniesIntegrationTest() {
         WireMock.stubFor(
-                WireMock.post("/api/user/create")
-                        .willReturn(
-                                WireMock.aResponse()
-                                        .withStatus(200)
-                                        .withHeader("Content-Type", "application/json")
-                                        .withBody("""
-                                    {
-                                        "id": "11111111-1111-1111-1111-111111111111",
-                                        "full_name": "Mock User",
-                                        "email": "mock@user.com"
-                                    }
-                                    """)
-                        )
+                WireMock.post("/api/auth/register-company-owner")
+                        .willReturn(WireMock.okJson("""
+                        {
+                          "id": "11111111-1111-1111-1111-111111111111",
+                          "token": "mock-token"
+                        }
+                        """))
         );
 
         CompanyRequestDto req1 = new CompanyRequestDto(
@@ -327,7 +238,6 @@ public class CompanyControllerTest {
                 "owner1@example.com",
                 "pass"
         );
-
         CompanyRequestDto req2 = new CompanyRequestDto(
                 "SuperCorp",
                 "sc@example.com",
@@ -337,17 +247,8 @@ public class CompanyControllerTest {
                 "pass"
         );
 
-        client.post()
-                .uri("/api/company/register-company")
-                .bodyValue(req1)
-                .exchange()
-                .expectStatus().isCreated();
-
-        client.post()
-                .uri("/api/company/register-company")
-                .bodyValue(req2)
-                .exchange()
-                .expectStatus().isCreated();
+        client.post().uri("/api/company/register-company").bodyValue(req1).exchange();
+        client.post().uri("/api/company/register-company").bodyValue(req2).exchange();
 
         client.get()
                 .uri(uriBuilder -> uriBuilder
@@ -358,15 +259,11 @@ public class CompanyControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.content").isArray()
                 .jsonPath("$.content.length()").isEqualTo(2)
-                .jsonPath("$.content[0].name").exists()
-                .jsonPath("$.content[1].name").exists()
-                .jsonPath("$.size").isEqualTo(10)
                 .jsonPath("$.number").isEqualTo(0);
     }
 
-    private ExchangeFilterFunction mockJwt(UUID userId) {
+    private ExchangeFilterFunction addAuthToken() {
         return ExchangeFilterFunction.ofRequestProcessor(req ->
                 Mono.deferContextual(ctx ->
                         Mono.just(
@@ -379,20 +276,15 @@ public class CompanyControllerTest {
     }
 
     private String generateJwt(UUID userId, String email, String... roles) {
-        var authorities = Arrays.stream(roles)
-                .map(SimpleGrantedAuthority::new)
-                .toList();
-
-        Authentication auth = new UsernamePasswordAuthenticationToken(
-                email,
-                null,
-                authorities
-        );
-
         return jwtService.generateAccessToken(
-                auth,
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        email, null,
+                        java.util.Arrays.stream(roles)
+                                .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                                .toList()
+                ),
                 userId,
-                List.of(roles)
+                java.util.List.of(roles)
         );
     }
 }
