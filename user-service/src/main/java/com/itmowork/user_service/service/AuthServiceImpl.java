@@ -3,6 +3,7 @@ package com.itmowork.user_service.service;
 import com.itmowork.user_service.dto.request.LoginRequestDto;
 import com.itmowork.user_service.dto.request.UserRequestDto;
 import com.itmowork.user_service.dto.response.AuthResponseDto;
+import com.itmowork.user_service.dto.response.UserResponseDto;
 import com.itmowork.user_service.exception.exceptions.UserAlreadyExistsException;
 import com.itmowork.user_service.model.Role;
 import com.itmowork.user_service.model.RoleName;
@@ -11,6 +12,7 @@ import com.itmowork.user_service.repository.UserRepository;
 import com.itmowork.user_service.security.JwtService;
 import com.itmowork.user_service.service.interfaces.AuthService;
 import com.itmowork.user_service.service.interfaces.RoleService;
+import com.itmowork.user_service.service.interfaces.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
@@ -31,8 +33,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-    //TODO change for user service later
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final ReactiveAuthenticationManager reactiveAuthenticationManager;
@@ -54,43 +55,49 @@ public class AuthServiceImpl implements AuthService {
         String email = loginRequestDto.email();
         String password = loginRequestDto.password();
 
-        Authentication authToken = new UsernamePasswordAuthenticationToken(email, password);
+        Authentication authToken =
+                new UsernamePasswordAuthenticationToken(email, password);
 
-        return reactiveAuthenticationManager.authenticate(authToken)
-                .flatMap(authentication -> Mono.fromCallable(() ->
-                                userRepository.findUserByEmail(email)
-                                        .orElseThrow(() -> new BadCredentialsException("User not found"))
-                        ).subscribeOn(Schedulers.boundedElastic())
+        return reactiveAuthenticationManager
+                .authenticate(authToken)
+                .flatMap(authentication ->
+                        userService.findUserByEmail(email)
+                                .switchIfEmpty(Mono.error(
+                                        new BadCredentialsException("User not found")
+                                ))
                 )
                 .flatMap(this::generateAuthResponse);
     }
 
-    private Mono<AuthResponseDto> registerUserByRoles(UserRequestDto userRequestDto, RoleName roleName){
+    private Mono<AuthResponseDto> registerUserByRoles(UserRequestDto userRequestDto, RoleName roleName) {
         String email = userRequestDto.email();
         String rawPassword = userRequestDto.password();
 
-        return Mono.fromCallable(() -> userRepository.findUserByEmail(email))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(optionalUser -> {
-                    if (optionalUser.isPresent()) {
-                        return Mono.error(new UserAlreadyExistsException("User already exists"));
-                    }
+        return userService.findUserByEmail(email)
+                .flatMap(existingUser ->
+                        Mono.<User>error(new UserAlreadyExistsException("User already exists"))
+                )
+                .switchIfEmpty(
+                        Mono.defer(() ->
+                                Mono.fromCallable(() ->
+                                                roleService.findRoleByRoleName(roleName)
+                                                        .orElseThrow(() -> new RoleNotFoundException(
+                                                                "Default role " + roleName + " not found"
+                                                        ))
+                                        )
+                                        .subscribeOn(Schedulers.boundedElastic())
+                                        .flatMap(defaultRole -> {
+                                            User newUser = User.builder()
+                                                    .fullName(userRequestDto.fullName())
+                                                    .email(email)
+                                                    .password(passwordEncoder.encode(rawPassword))
+                                                    .role(List.of(defaultRole))
+                                                    .build();
 
-                    return Mono.fromCallable(() -> {
-
-                        Role defaultRole = roleService.findRoleByRoleName(roleName)
-                                .orElseThrow(() -> new RoleNotFoundException("Default role " + roleName + " not found"));
-
-                        User newUser = User.builder()
-                                .fullName(userRequestDto.fullName())
-                                .email(email)
-                                .password(passwordEncoder.encode(rawPassword))
-                                .role(List.of(defaultRole))
-                                .build();
-
-                        return userRepository.save(newUser);
-                    }).subscribeOn(Schedulers.boundedElastic());
-                })
+                                            return userService.saveUser(newUser);
+                                        })
+                        )
+                )
                 .flatMap(this::generateAuthResponse);
     }
 
