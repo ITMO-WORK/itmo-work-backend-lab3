@@ -30,7 +30,7 @@ public class CustomAccessDeniedHandler implements ServerAccessDeniedHandler {
                 HttpStatus.FORBIDDEN,
                 "Access denied",
                 "You do not have rights to perform this action",
-                exchange.getRequest()
+                exchange
         );
 
         byte[] bytes;

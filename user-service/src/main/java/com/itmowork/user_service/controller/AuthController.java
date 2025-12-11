@@ -4,6 +4,7 @@ import com.itmowork.user_service.dto.request.LoginRequestDto;
 import com.itmowork.user_service.dto.request.UserRequestDto;
 import com.itmowork.user_service.dto.response.AuthResponseDto;
 import com.itmowork.user_service.service.interfaces.AuthService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<AuthResponseDto> register(@RequestBody @Valid Mono<UserRequestDto> userRequestDto){
         return userRequestDto
                 .flatMap(authService::registerUser)

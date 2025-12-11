@@ -32,6 +32,11 @@ public class SecurityConfiguration {
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
 
+        serverHttpRequest.exceptionHandling(ex -> ex
+                .authenticationEntryPoint(customAuthenticationEntryPointHandler)
+                .accessDeniedHandler(customAccessDeniedHandler)
+        );
+
         serverHttpRequest.authorizeExchange(auth -> auth
                 .pathMatchers(
                         "/api/auth/**",
@@ -43,10 +48,6 @@ public class SecurityConfiguration {
                 ).permitAll()
                 .anyExchange().authenticated()
         ).addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION);
-        serverHttpRequest.exceptionHandling(handler -> handler
-                .authenticationEntryPoint(customAuthenticationEntryPointHandler)
-                .accessDeniedHandler(customAccessDeniedHandler)
-        );
         return serverHttpRequest.build();
 
     }

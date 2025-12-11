@@ -58,7 +58,7 @@ public class JwtFilter implements WebFilter {
             Authentication authentication = new UsernamePasswordAuthenticationToken(new UserPrincipal(email, userId), null, authorityList);
             return chain.filter(exchange).contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(new SecurityContextImpl(authentication))));
         } catch (JwtException | IllegalArgumentException ex){
-            return chain.filter(exchange);
+            return Mono.error(new org.springframework.security.authentication.BadCredentialsException("Invalid or expired token", ex));
         }
     }
 }

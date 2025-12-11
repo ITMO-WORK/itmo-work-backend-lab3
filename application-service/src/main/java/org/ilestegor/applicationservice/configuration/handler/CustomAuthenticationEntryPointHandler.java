@@ -29,7 +29,7 @@ public class CustomAuthenticationEntryPointHandler implements ServerAuthenticati
                 HttpStatus.UNAUTHORIZED,
                 "Unauthorized",
                 "Authentication token is missing or invalid",
-                exchange.getRequest()
+                exchange
         );
 
         byte[] bytes;

@@ -1,5 +1,6 @@
 package org.ilestegor.applicationservice.contoller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.ilestegor.applicationservice.dto.ApplicationDto;
@@ -30,22 +31,26 @@ public class ApplicationController {
     private final ApplicationService applicationService;
 
     @PostMapping
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<ApplicationCreateResponseDto>> createApplication(@RequestParam UUID vacancyId, @Valid @RequestBody ApplicationCreateRequestDto applicationCreateRequestDto){
         return applicationService.createApplication(vacancyId, applicationCreateRequestDto).map(body -> new ResponseEntity<>(body, HttpStatus.CREATED));
     }
 
     @PatchMapping("/{vacancyId}")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<ApplicationCreateResponseDto>> updateApplication(@PathVariable UUID vacancyId, @RequestBody ApplicationCreateRequestDto applicationCreateRequestDto){
         return applicationService.updateApplication(vacancyId, applicationCreateRequestDto).map(body -> new ResponseEntity<>(body, HttpStatus.OK));
     }
 
     @PatchMapping("/{applicationId}/status")
+    @SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER', 'EMPLOYEE')")
     public Mono<ResponseEntity<ApplicationStatusUpdateResponseDto>> updateApplicationStatus(@PathVariable UUID applicationId, @RequestBody ApplicationStatusUpdateRequestDto applicationStatusUpdateRequestDto){
         return applicationService.updateApplicationStatus(applicationId, applicationStatusUpdateRequestDto).map(body -> new ResponseEntity<>(body, HttpStatus.OK));
     }
 
     @GetMapping
+    @SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'COMPANY_OWNER', 'EMPLOYEE')")
     public Mono<Page<ApplicationDto>> getAllApplicationsByVacancyId(@RequestParam UUID vacancyId, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size){
         Pageable pageable = PageRequest.of(page, size);
